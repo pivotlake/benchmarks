@@ -1,0 +1,9 @@
+#!/bin/bash
+set -e
+
+# Copy every table from the parquet files into DuckDB's own database file.
+rm -f tpch.db
+for table in "$BENCH_DATA"/*/; do
+    table=$(basename "$table")
+    echo "CREATE TABLE $table AS FROM read_parquet('$BENCH_DATA/$table/*.parquet');"
+done | duckdb tpch.db

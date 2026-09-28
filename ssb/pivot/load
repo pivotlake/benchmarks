@@ -1,0 +1,21 @@
+#!/bin/bash
+set -eu
+: "${PIVOT_PORT:=5432}"
+
+# No ingestion: the tables adopt the parquet files in place. Adopting a
+# directory writes a _delta_log into it, so pivot adopts hard links beside the
+# dataset rather than the dataset's own directories.
+links="$BENCH_DATA-pivot"
+rm -rf "$links"
+tables=()
+for dir in "$BENCH_DATA"/*/; do
+    table=$(basename "$dir")
+    tables+=("$table")
+    mkdir -p "$links/$table"
+    ln "$dir"*.parquet "$links/$table/"
+done
+
+{
+    printf 'DROP TABLE IF EXISTS %s;\n' "${tables[@]}"
+    sed "s|{source}|$links|g" create.sql
+} | psql -h 127.0.0.1 -p "$PIVOT_PORT" -U pivot -d postgres -v ON_ERROR_STOP=1 -q -f -

@@ -1,0 +1,4 @@
+[submodule "clickbench/ClickBench"]
+	path = clickbench/ClickBench
+	url = https://github.com/pivotlake/ClickBench.git
+	branch = pivot-parquet

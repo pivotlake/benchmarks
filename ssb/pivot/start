@@ -1,0 +1,21 @@
+#!/bin/bash
+set -eu
+: "${PIVOT_HOME:=$HOME/.pivot}"
+: "${PIVOT_BINARY:=$PIVOT_HOME/cli/latest/pivot}"
+: "${PIVOT_PORT:=5432}"
+
+./check 2>/dev/null && exit 0
+
+mkdir -p catalog
+cat > config.yaml <<CONFIG
+server:
+  bind: 127.0.0.1:$PIVOT_PORT
+datastores:
+  default:
+    kind: pivot
+    location: $PWD/catalog
+    default: true
+CONFIG
+
+nohup "$PIVOT_BINARY" server --config "$PWD/config.yaml" > server.log 2>&1 &
+echo $! > server.pid

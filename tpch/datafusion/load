@@ -1,0 +1,9 @@
+#!/bin/bash
+set -e
+
+# No ingestion: tables.sql defines one external table per directory, read in
+# place. ./query runs it ahead of every query.
+for table in "$BENCH_DATA"/*/; do
+    table=$(basename "$table")
+    echo "CREATE EXTERNAL TABLE $table STORED AS PARQUET LOCATION '$BENCH_DATA/$table/';"
+done > tables.sql

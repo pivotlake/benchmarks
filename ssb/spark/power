@@ -1,0 +1,7 @@
+#!/bin/bash
+# Runs the query files given as arguments, in order, in ONE PySpark session
+# (power.py). Stdout: each query's runtime in seconds, one per line. Exits
+# non-zero at the first failing query.
+set -e
+
+myenv/bin/python power.py "$@"

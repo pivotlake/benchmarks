@@ -1,0 +1,4 @@
+#!/bin/bash
+set -e
+
+du -bc "$BENCH_DATA"/*/*.parquet | tail -n1 | cut -f1

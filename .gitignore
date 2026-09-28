@@ -1,0 +1,25 @@
+# Datasets, generators and results
+/*/datasets/
+/*/results/
+/ssb/data/ssb-dbgen/
+/clickbench/data/
+
+# What the engines' scripts create in their directories
+/*/*/tmp/
+/*/*/*.db
+/*/*/tables.sql
+/*/pivot/catalog/
+/*/pivot/config.yaml
+/*/pivot/server.log
+/*/pivot/server.pid
+/*/clickhouse/clickhouse
+/*/clickhouse/access/
+/*/clickhouse/data/
+/*/clickhouse/preprocessed_configs/
+/*/clickhouse/server.log
+/*/clickhouse/server.pid
+/*/clickhouse-parquet/clickhouse
+/*/datafusion/bin/
+/*/datafusion/.crates.toml
+/*/datafusion/.crates2.json
+/*/spark/myenv

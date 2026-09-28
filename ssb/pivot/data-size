@@ -1,0 +1,5 @@
+#!/bin/bash
+set -eu
+
+# No ingestion: the size is the parquet files the tables read.
+du -bc "$BENCH_DATA"/*/*.parquet | tail -n1 | cut -f1

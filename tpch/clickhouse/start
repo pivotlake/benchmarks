@@ -1,0 +1,13 @@
+#!/bin/bash
+set -e
+
+./check 2>/dev/null && exit 0
+
+# The server keeps its tables in ./data, so the engine's storage is on the
+# disk this directory is on, and reads files from the dataset directory.
+# async_load_databases=false loads the tables at startup rather than on the
+# first query, so the cold timer doesn't catch it (as ClickBench does).
+mkdir -p data
+nohup ./clickhouse server -- --path="$PWD/data/" --listen_host=127.0.0.1 \
+    --user_files_path="$BENCH_DATA/" --async_load_databases=false > server.log 2>&1 &
+echo $! > server.pid

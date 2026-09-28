@@ -1,0 +1,18 @@
+#!/bin/bash
+# Runs the query files given as arguments, in order, in ONE datafusion-cli
+# process, after the table definitions in tables.sql. Stdout: each query's
+# runtime in seconds (the CLI's "Elapsed" line), one per line.
+set -e
+
+err=$(mktemp)
+trap 'rm -f "$err"' EXIT
+
+# The CLI exits 0 even when a statement fails, so any stderr is a failure.
+out=$(bin/datafusion-cli -f tables.sql "$@" 2>"$err") && status=0 || status=$?
+if [ "$status" -ne 0 ] || [ -s "$err" ]; then
+    cat "$err" >&2
+    exit 1
+fi
+
+# One "Elapsed" per statement: the table definitions', then the queries'.
+printf '%s\n' "$out" | awk '/^Elapsed / { print $2 }' | tail -n "$#"

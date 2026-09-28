@@ -1,0 +1,12 @@
+#!/bin/bash
+set -e
+
+./clickhouse client --multiquery < create.sql
+for table in "$BENCH_DATA"/*/; do
+    table=$(basename "$table")
+    # file() paths are relative to the dataset directory (--user_files_path).
+    ./clickhouse client --query "INSERT INTO $table SELECT * FROM file('$table/*.parquet')"
+    # Merge the inserted parts, so queries read a settled table. Large merges
+    # report no progress for minutes, hence the long receive timeout.
+    ./clickhouse client --receive_timeout 86400 --query "OPTIMIZE TABLE $table FINAL"
+done

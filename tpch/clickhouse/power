@@ -1,0 +1,10 @@
+#!/bin/bash
+# Runs the query files given as arguments, in order, over ONE clickhouse client
+# connection. Stdout: each query's runtime in seconds (--time), one per line. A
+# failing query stops the run with a non-zero exit. join_use_nulls gives an
+# outer join's unmatched side SQL's NULLs (q13 counts them).
+set -e
+
+cat "$@" | ./clickhouse client --multiquery --join_use_nulls 1 --time --format Null 2>&1 >/dev/null |
+    grep -E '^[0-9]+(\.[0-9]+)?$'
+exit "${PIPESTATUS[1]}"

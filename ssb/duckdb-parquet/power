@@ -1,0 +1,12 @@
+#!/bin/bash
+# Runs the query files given as arguments, in order, in ONE duckdb process over
+# the views in ssb.db. Stdout: each query's runtime in seconds (duckdb's
+# .timer), one per line. -bail stops at the first failing query and exits
+# non-zero.
+set -e
+
+out=$({ echo "SET parquet_metadata_cache = true;"; echo ".timer on"
+        for file in "$@"; do cat "$file"; echo; done; } |
+    duckdb -readonly -bail ssb.db 2>&1) || { printf '%s\n' "$out" | tail -n5 >&2; exit 1; }
+
+printf '%s\n' "$out" | awk '/^Run Time/ { print $5 }'
