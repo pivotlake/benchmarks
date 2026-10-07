@@ -1,0 +1,33 @@
+#!/bin/bash
+set -e
+
+# Copy every table from the parquet files into StarRocks' own tables (FILES()
+# reads them off the local disk), then collect each table's statistics, which
+# its cost-based optimizer plans the joins with; StarRocks would otherwise
+# collect them in the background some time after the load. BY NAME, since
+# lineitem's key columns come first and so out of the files' order. A large
+# scale factor's INSERT and ANALYZE run far past the default timeouts.
+sql() { mysql -h127.0.0.1 -P9030 -uroot "$@"; }
+
+sql -e "DROP DATABASE IF EXISTS tpch; CREATE DATABASE tpch"
+sql tpch < create.sql
+
+# A new cluster creates the tables statistics go into in the background, a
+# while after its first BE comes up; ANALYZE fails until they exist.
+for _ in $(seq 1 300); do
+    sql -e "SELECT 1 FROM _statistics_.column_statistics LIMIT 1" >/dev/null 2>&1 && break
+    sleep 1
+done
+
+for table in "$BENCH_DATA"/*/; do
+    table=$(basename "$table")
+    sql tpch -e "SET insert_timeout = 86400; SET query_timeout = 86400;
+        INSERT INTO $table BY NAME SELECT * FROM FILES(
+            'path' = 'file://$BENCH_DATA/$table/*.parquet', 'format' = 'parquet')"
+    # ANALYZE reports a failure as a result row, not an error.
+    result=$(sql tpch -B -N -e "SET query_timeout = 86400; ANALYZE FULL TABLE $table")
+    if printf '%s\n' "$result" | awk -F'\t' '$3 != "status" || $4 != "OK" { bad = 1 } END { exit !bad }'; then
+        printf 'ANALYZE %s failed:\n%s\n' "$table" "$result" >&2
+        exit 1
+    fi
+done

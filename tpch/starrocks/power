@@ -1,0 +1,25 @@
+#!/bin/bash
+# Runs the query files given as arguments, in order, over ONE mysql client
+# connection to StarRocks. Stdout: each query's runtime in seconds as the
+# client reports it ("N rows in set (1 min 2.345 sec)"), one per line. The
+# client stops at the first failing query and exits non-zero. The session's
+# query_timeout goes from 300 seconds to a day, as no other engine has a
+# per-query limit. StarRocks has no SQL-standard substring(s from i for n)
+# (q22), so it gets the equivalent substring(s, i, n).
+set -e
+
+{ echo "SET query_timeout = 86400;"; for file in "$@"; do cat "$file"; echo; done; } |
+    sed -E 's/substring\(([a-z_]+) from ([0-9]+) for ([0-9]+)\)/substring(\1, \2, \3)/g' |
+    mysql -vvv -h127.0.0.1 -P9030 -uroot tpch |
+    awk '/(rows? in set|Empty set) \(/ {
+        sub(/.*\(/, ""); sub(/\).*/, "")
+        secs = 0
+        for (i = 1; i < NF; i += 2) {
+            if ($(i + 1) ~ /^day/) secs += $i * 86400
+            else if ($(i + 1) ~ /^hour/) secs += $i * 3600
+            else if ($(i + 1) ~ /^min/) secs += $i * 60
+            else secs += $i
+        }
+        print secs
+    }'
+exit "${PIPESTATUS[1]}"

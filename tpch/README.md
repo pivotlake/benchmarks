@@ -1,6 +1,6 @@
 # TPC-H
 
-The 22 TPC-H queries on seven engines, all reading the same rows:
+The 22 TPC-H queries on eight engines, all reading the same rows:
 
 | engine | reads |
 |---|---|
@@ -11,13 +11,18 @@ The 22 TPC-H queries on seven engines, all reading the same rows:
 | `clickhouse-parquet` | the parquet files in place (`clickhouse-local`) |
 | `datafusion` | the parquet files in place (`datafusion-cli`) |
 | `spark` | the parquet files in place (PySpark, one local session for the whole power run) |
+| `starrocks` | its own tables (duplicate key on the same primary keys), loaded from the parquet files, with statistics collected by `ANALYZE` |
 
 Every engine runs on its default settings and is installed the way ClickBench
 installs it: the latest pivot and DuckDB releases, ClickHouse's latest build
 from clickhouse.com, and the latest DataFusion release built from source with
 LTO. Spark is the latest PySpark release on Java 17, run the way ClickBench
 runs it; ClickBench pins Spark 3.5.5, whose vectorized parquet reader fails on
-some of the string pages pivot writes.
+some of the string pages pivot writes. StarRocks is the release ClickBench
+pins (4.0.14), one FE and one BE on the box, with two departures from its
+defaults: the power run's session lifts `query_timeout` from 300 seconds (no
+other engine stops a slow query), and its BE keeps its page cache, which
+ClickBench turns off (the restart before the power run empties it anyway).
 
 ```sh
 ./run-all.sh 100                                   # all engines at SF100
@@ -28,7 +33,7 @@ PIVOT_BINARY=~/pivot/target/release/pivot ./run-all.sh 100 pivot
 
 Nothing is installed system-wide beyond packages: each engine keeps its
 binary, its tables (DuckDB's database file, ClickHouse's data directory,
-pivot's catalog) and its spill files in its own directory. Clone the repo onto
+StarRocks' storage directory, pivot's catalog) and its spill files in its own directory. Clone the repo onto
 the disk you want measured, an NVMe mount say, and the whole run stays on it.
 
 ## Data
@@ -59,7 +64,7 @@ one's end. That wall time is the score; each query's own time is printed too.
 One session means one process for the embedded engines (a single `duckdb`,
 `datafusion-cli` or `clickhouse-local` runs all 22 queries, so later queries
 find what earlier ones left in its memory) and one connection for the servers
-(pivot, ClickHouse). A query that fails ends the run without a score, and the
+(pivot, ClickHouse, StarRocks). A query that fails ends the run without a score, and the
 whole run may take `BENCH_TIMEOUT` seconds (default 3600).
 
 Each engine directory has ClickBench's small scripts (`install`, `start`,
@@ -78,4 +83,5 @@ read-only parquet dataset does not have.
 parameters, with two changes every engine gets: q11's HAVING fraction is
 `0.0001 / SF` (the driver fills in `{fraction}`), and q11 sorts by
 `ps_partkey` after `value` so tied values come back in one order. q15's view
-is written as a CTE.
+is written as a CTE. StarRocks alone has no `substring(s from i for n)`, so
+its `power` script hands it q22 with the equivalent `substring(s, i, n)`.

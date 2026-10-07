@@ -23,3 +23,5 @@
 /*/datafusion/.crates.toml
 /*/datafusion/.crates2.json
 /*/spark/myenv
+/*/starrocks/StarRocks-*
+/*/starrocks/.sr_dir

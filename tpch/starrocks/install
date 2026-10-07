@@ -1,0 +1,30 @@
+#!/bin/bash
+set -e
+
+# The StarRocks release ClickBench's starrocks entry installs, unpacked here: FE
+# metadata, BE storage, logs and spill files all stay in this directory. Unlike
+# ClickBench we keep the BE's page cache (its default): the power run restarts
+# StarRocks before it starts, so the cache starts empty either way.
+VERSION="4.0.14-ubuntu-$(dpkg --print-architecture)"
+SR_DIR="StarRocks-$VERSION"
+
+if [ ! -d "$SR_DIR" ]; then
+    if [ ! -f "$SR_DIR.tar.gz" ]; then
+        wget --continue --progress=dot:giga \
+            "https://releases.starrocks.io/starrocks/$SR_DIR.tar.gz" \
+            -O "$SR_DIR.tar.gz"
+    fi
+    tar zxf "$SR_DIR.tar.gz"
+    rm "$SR_DIR.tar.gz"
+
+    mkdir -p "$SR_DIR/meta" "$SR_DIR/storage"
+    printf "\nmeta_dir = $PWD/$SR_DIR/meta\n" >> "$SR_DIR/fe/conf/fe.conf"
+    printf "\nstorage_root_path = $PWD/$SR_DIR/storage\n" >> "$SR_DIR/be/conf/be.conf"
+fi
+
+if ! command -v mysql >/dev/null || [ ! -d "/usr/lib/jvm/java-17-openjdk-$(dpkg --print-architecture)" ]; then
+    sudo apt-get update -y
+    sudo apt-get install -y openjdk-17-jre mariadb-client
+fi
+
+echo "$SR_DIR" > .sr_dir

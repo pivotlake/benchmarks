@@ -1,0 +1,4 @@
+#!/bin/bash
+set -e
+
+du -bs "$(cat .sr_dir)/storage" | cut -f1
