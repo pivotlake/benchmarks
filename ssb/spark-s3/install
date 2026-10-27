@@ -1,0 +1,15 @@
+#!/bin/bash
+set -e
+
+# Java and PySpark in a virtualenv, as ClickBench's spark entry installs them,
+# but the latest PySpark rather than ClickBench's 3.5.5: Spark 3.5's
+# vectorized parquet reader fails on some of the DELTA_LENGTH_BYTE_ARRAY
+# string pages pivot writes ("Failed to read N bytes"), which Spark 4 reads.
+if ! command -v java >/dev/null || ! python3 -m venv --help >/dev/null 2>&1; then
+    sudo apt-get update -y
+    sudo apt-get install -y python3-pip python3-venv openjdk-17-jdk
+fi
+if [ ! -d myenv ]; then
+    python3 -m venv myenv
+fi
+myenv/bin/pip install -q --upgrade pyspark psutil

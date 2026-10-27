@@ -1,0 +1,14 @@
+#!/bin/bash
+# Runs the query files given as arguments, in order, in ONE clickhouse-local
+# process, after the table definitions in tables.sql. Stdout: each query's
+# runtime in seconds (--time), one per line. A failing query stops the run with
+# a non-zero exit. join_use_nulls gives an outer join's unmatched side SQL's
+# NULLs (q13 counts them).
+set -e
+
+# --time prints one line per statement: skip the table definitions' (one per
+# line of tables.sql).
+definitions=$(wc -l < tables.sql)
+./clickhouse local --join_use_nulls 1 --time --format Null --query "$(cat tables.sql "$@")" 2>&1 >/dev/null |
+    grep -E '^[0-9]+(\.[0-9]+)?$' | tail -n "+$((definitions + 1))"
+exit "${PIPESTATUS[0]}"

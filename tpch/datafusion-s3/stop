@@ -1,0 +1,3 @@
+#!/bin/bash
+# datafusion-cli runs per query: no daemon to stop.
+exit 0

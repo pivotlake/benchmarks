@@ -5,7 +5,7 @@ scripts short enough to read. Each benchmark has a `run-all.sh` that runs every
 engine and prints one comparison:
 
 - [`tpch/`](tpch): TPC-H at any scale factor (SF100 and SF1000 are the usual
-  ones), on parquet files written by pivot.
+  ones), on parquet files written by pivot, on local disk and in S3.
 - [`ssb/`](ssb): the Star Schema Benchmark on the same kind of data.
 - [`clickbench/`](clickbench): ClickBench, through ClickBench's own harness
   (our fork, which carries the pivot entries, as a submodule).
@@ -29,10 +29,16 @@ install packages) and plenty of local disk.
 ```sh
 git clone --recurse-submodules https://github.com/pivotlake/benchmarks.git
 cd benchmarks
-tpch/run-all.sh 100                  # every engine at TPC-H SF100
+tpch/run-all.sh 100                  # every local engine at TPC-H SF100
 ssb/run-all.sh 1000 pivot duckdb     # two engines at SSB SF1000
+tpch/run-all.sh 1000 pivot-s3 duckdb-s3   # two engines over the files in S3
 clickbench/run-all.sh                # the default ClickBench systems
 ```
+
+The engines that read the parquet files in place (pivot, DuckDB, ClickHouse,
+DataFusion and Spark) also come as `<engine>-s3`, reading the same files from
+an S3 bucket in us-east-1 (`s3://pivotlake-benchmarks`, which holds the usual
+scale factors; `S3_DATA` names another); `tpch/README.md` has the details.
 
 `tpch/` and `ssb/` each hold their queries, a data generator and one directory
 per engine with ClickBench's small scripts plus `power`; `lib/` holds what they

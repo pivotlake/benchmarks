@@ -1,6 +1,7 @@
 # TPC-H
 
-The 22 TPC-H queries on eight engines, all reading the same rows:
+The 22 TPC-H queries on eight engines, all reading the same rows, and on the
+five that read the parquet files in place once more with the files in S3:
 
 | engine | reads |
 |---|---|
@@ -12,6 +13,7 @@ The 22 TPC-H queries on eight engines, all reading the same rows:
 | `datafusion` | the parquet files in place (`datafusion-cli`) |
 | `spark` | the parquet files in place (PySpark, one local session for the whole power run) |
 | `starrocks` | its own tables (duplicate key on the same primary keys), loaded from the parquet files, with statistics collected by `ANALYZE` |
+| `pivot-s3`, `duckdb-s3`, `clickhouse-s3`, `datafusion-s3`, `spark-s3` | the same parquet files in an S3 bucket, each the way its local counterpart reads them in place (see [Reading from S3](#reading-from-s3)) |
 
 Every engine runs on its default settings and is installed the way ClickBench
 installs it: the latest pivot and DuckDB releases, ClickHouse's latest build
@@ -25,9 +27,11 @@ other engine stops a slow query), and its BE keeps its page cache, which
 ClickBench turns off (the restart before the power run empties it anyway).
 
 ```sh
-./run-all.sh 100                                   # all engines at SF100
+./run-all.sh 100                                   # all local engines at SF100
 ./run-all.sh 1000 pivot duckdb clickhouse          # some engines at SF1000
+./run-all.sh 1000 pivot-s3 duckdb-s3 clickhouse-s3 datafusion-s3 spark-s3   # over S3
 DATA_DIR=/mnt/nvme/tpch ./run-all.sh 1000          # datasets on another disk
+S3_DATA=s3://my-bucket/tpch ./run-all.sh 100 pivot pivot-s3   # another bucket
 PIVOT_BINARY=~/pivot/target/release/pivot ./run-all.sh 100 pivot
 ```
 
@@ -52,6 +56,38 @@ their own storage load from those files.
 `run-all.sh` does both once per scale factor and keeps the result in
 `datasets/sf<N>`. SF1000 is ~396 GB generated and needs a few TB of disk once
 the engines' own copies are loaded.
+
+## Reading from S3
+
+The `-s3` engines are the engines that read the parquet files in place, run
+once more over the same files in an S3 bucket: `pivot-s3`, `duckdb-s3`,
+`clickhouse-s3`, `datafusion-s3` and `spark-s3` are their local counterparts'
+scripts pointed at `s3://pivotlake-benchmarks/tpch/sf<N>/<table>/*.parquet`
+(set `S3_DATA=s3://bucket/prefix` to read `<prefix>/sf<N>` from another
+bucket). They run only when named. The first time one runs at a scale factor,
+`run-all.sh` uploads the dataset to the bucket, generating it first when the
+box has no copy; a scale factor the bucket already holds needs no local copy
+at all. `pivotlake-benchmarks` is in us-east-1 and holds SF1 and SF1000 (the
+first `-s3` run at another scale factor adds it): to measure the engines
+rather than the network, run from a box in us-east-1.
+
+Each engine reads the bucket the way it reads S3 by default: DuckDB through
+`httpfs` with a `credential_chain` secret, `clickhouse-local` through its `S3`
+table engine, `datafusion-cli` through external tables at `s3://` locations,
+Spark through Hadoop's S3A connector (`hadoop-aws`, which `load` fetches from
+Maven into the engine's directory so the download stays out of the power run),
+and pivot through a datastore in the bucket beside the dataset
+(`sf<N>-pivot/`, holding its catalog and the tables' Delta logs) whose tables
+adopt the dataset's files in place, as `pivot` adopts them on disk. The
+engines take the keys from `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`,
+which `run-all.sh` exports from the AWS CLI's credentials when the environment
+carries none, and the bucket's region from `AWS_REGION`; pivot's server reads
+them from a secret in its config file, which takes a user's access key rather
+than an STS session token.
+
+The power run is the same: the engine is restarted and the page cache
+dropped, then the queries run back to back in one session, so every byte
+comes from the bucket. `data-size` is the bytes in the bucket.
 
 ## Running: a power run
 

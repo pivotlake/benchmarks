@@ -12,6 +12,9 @@
 /*/pivot/config.yaml
 /*/pivot/server.log
 /*/pivot/server.pid
+/*/pivot-s3/config.yaml
+/*/pivot-s3/server.log
+/*/pivot-s3/server.pid
 /*/clickhouse/clickhouse
 /*/clickhouse/access/
 /*/clickhouse/data/
@@ -19,9 +22,16 @@
 /*/clickhouse/server.log
 /*/clickhouse/server.pid
 /*/clickhouse-parquet/clickhouse
+/*/clickhouse-s3/clickhouse
 /*/datafusion/bin/
 /*/datafusion/.crates.toml
 /*/datafusion/.crates2.json
+/*/datafusion-s3/bin/
+/*/datafusion-s3/.crates.toml
+/*/datafusion-s3/.crates2.json
 /*/spark/myenv
+/*/spark-s3/myenv
+/*/spark-s3/ivy/
+/*/spark-s3/tables.txt
 /*/starrocks/StarRocks-*
 /*/starrocks/.sr_dir

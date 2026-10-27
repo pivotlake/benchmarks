@@ -1,0 +1,9 @@
+#!/bin/bash
+set -e
+
+if [ ! -x bin/datafusion-cli ]; then
+    source ../../lib/install-rust.sh
+    # The latest release, built the way DataFusion's ClickBench entry builds it.
+    CARGO_PROFILE_RELEASE_LTO=true RUSTFLAGS="-C codegen-units=1" \
+        cargo install datafusion-cli --locked --root .
+fi

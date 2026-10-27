@@ -1,0 +1,10 @@
+#!/bin/bash
+set -e
+
+# No ingestion: tables.sql defines one S3(Parquet) table per directory, read in
+# place with the keys in the environment. ./power runs it ahead of every query.
+bucket="${BENCH_S3#s3://}"
+url="https://${bucket%%/*}.s3.$AWS_REGION.amazonaws.com/${bucket#*/}"
+for table in $(aws s3 ls "$BENCH_S3/" | awk '/ PRE / { print substr($2, 1, length($2) - 1) }'); do
+    echo "CREATE TABLE $table ENGINE = S3('$url/$table/*.parquet', 'Parquet');"
+done > tables.sql

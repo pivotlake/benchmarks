@@ -1,0 +1,13 @@
+#!/bin/bash
+set -eu
+: "${PIVOT_PORT:=5432}" "${BENCH_S3:?}"
+
+# No ingestion: the tables adopt the parquet files in the bucket in place.
+# with_pre_existing_parquets names a key from the bucket's root, not a URL.
+source="/${BENCH_S3#s3://*/}"
+tables=($(aws s3 ls "$BENCH_S3/" | awk '/ PRE / { print substr($2, 1, length($2) - 1) }'))
+
+{
+    printf 'DROP TABLE IF EXISTS %s;\n' "${tables[@]}"
+    sed "s|{source}|$source|g" ../pivot/create.sql
+} | psql -h 127.0.0.1 -p "$PIVOT_PORT" -U pivot -d postgres -v ON_ERROR_STOP=1 -q -f -

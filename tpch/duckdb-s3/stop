@@ -1,0 +1,3 @@
+#!/bin/bash
+# duckdb is embedded: no daemon to stop.
+exit 0
