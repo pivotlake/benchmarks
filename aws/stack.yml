@@ -74,6 +74,7 @@ Resources:
     Type: AWS::IAM::Role
     Properties:
       RoleName: pivot-benchmarks-launcher
+      MaxSessionDuration: 43200   # a run job waits for its machine for up to 6 hours
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:

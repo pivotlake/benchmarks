@@ -116,6 +116,7 @@ jobs:
           role-to-assume: ${{ vars.AWS_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION }}
           role-session-name: pivot-benchmarks-${{ github.run_id }}-${{ strategy.job-index }}
+          role-duration-seconds: 21600   # the whole job, not the default hour
 
       - name: Launch the machine
         id: launch
@@ -136,9 +137,19 @@ jobs:
           instance_id: ${{ steps.launch.outputs.instance_id }}
         run: |
           echo "waiting for $instance_id; its upload will be at s3://$bucket/$database/$run/$key/$machine/"
+          # Only "terminated", or the instance no longer being known to EC2, ends
+          # the wait; any other failure of the call is retried.
           while :; do
-            state=$(aws ec2 describe-instances --instance-ids "$instance_id" \
-              --query 'Reservations[0].Instances[0].State.Name' --output text 2>/dev/null || echo gone)
+            if out=$(aws ec2 describe-instances --instance-ids "$instance_id" \
+                --query 'Reservations[0].Instances[0].State.Name' --output text 2>&1); then
+              state=$out
+            elif grep -q InvalidInstanceID.NotFound <<< "$out"; then
+              state=gone
+            else
+              echo "$(date -u '+%T') describe-instances failed, retrying: $out"
+              sleep 60
+              continue
+            fi
             [ "$state" != terminated ] && [ "$state" != gone ] || break
             echo "$(date -u '+%T') $state"
             sleep 120
