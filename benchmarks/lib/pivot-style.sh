@@ -15,6 +15,7 @@
 #   The create.sql is a suite's pivot/create.sql (tables adopting {source}/<table>);
 #   the pivot/install beside it installs pivot.
 #   PIVOT_BINARY  use this pivot instead of the latest release
+#   PIVOT_COMPACT_PARALLELISM  merges the rewrite runs at once (pivot's default, 1)
 
 set -eu
 
@@ -50,6 +51,7 @@ datastores:
     kind: pivot
     location: $work/catalog
     default: true
+    compact_parallelism: ${PIVOT_COMPACT_PARALLELISM:-1}
 CONFIG
 "$PIVOT_BINARY" server --config "$work/config.yaml" > "$work/server.log" 2>&1 &
 server=$!
