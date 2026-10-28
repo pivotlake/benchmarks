@@ -12,8 +12,7 @@ engine and prints one comparison:
 
 [`website/`](website) shows the results the way ClickBench's site does: one JSON
 per system and machine under `website/results/<benchmark>/<system>/`, baked into
-`website/data.js` by `website/generate-results.sh`. (The results there are
-placeholders for now.)
+`website/data.js` by `website/generate-results.sh`.
 
 `benchmarks/run-and-collect.sh` runs chosen benchmarks on chosen databases and
 writes their results into the website. The Benchmark workflow (Actions, "Run
