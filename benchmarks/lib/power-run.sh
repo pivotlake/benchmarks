@@ -35,6 +35,11 @@ set -e
 : "${BENCH_RESTARTABLE:=yes}"
 : "${BENCH_TIMEOUT:=3600}"
 
+# A dataset at a large scale factor is thousands of parquet files, and an engine
+# that reads them in place opens many at once: lift the open-file limit as far
+# as it goes (1024 by default, which SF1000 blows through at load).
+ulimit -n "$(ulimit -Hn)"
+
 # Engines spill and keep scratch files under $TMPDIR: keep them in the engine's
 # directory, on the same disk as its storage, rather than on the root volume.
 export TMPDIR="$PWD/tmp"

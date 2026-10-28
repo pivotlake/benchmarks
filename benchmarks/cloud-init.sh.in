@@ -25,6 +25,9 @@ exec 2>&1
 
 export HOME=/root
 export DEBIAN_FRONTEND=noninteractive
+# Thousands of parquet files at the larger scale factors: the default limit of
+# 1024 open files fails their load. The hard limit is 1048576 on Ubuntu.
+ulimit -n "$(ulimit -Hn)"
 export AWS_DEFAULT_REGION='@AWS_REGION@'
 log=/root/run.log
 out=/root/out
