@@ -39,8 +39,19 @@ for system in "${systems[@]}"; do
 done
 export BENCH_CONCURRENT_DURATION=0
 
-ClickBench/lib/download-hits-parquet-partitioned data
-ClickBench/lib/download-hits-parquet-single data
+# The helpers fetch a hundred files in parallel and give up on the first
+# failure (a 502 from the CDN now and then); a retry resumes what is missing.
+download() {
+    for attempt in 1 2 3 4 5; do
+        "ClickBench/lib/$1" data && return 0
+        echo "$1 failed (attempt $attempt of 5), retrying in 30s" >&2
+        sleep 30
+    done
+    echo "$1 failed five times" >&2
+    return 1
+}
+download download-hits-parquet-partitioned
+download download-hits-parquet-single
 
 mkdir -p results
 for system in "${systems[@]}"; do
