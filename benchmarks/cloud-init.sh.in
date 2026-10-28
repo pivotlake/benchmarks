@@ -18,6 +18,10 @@
 
 shutdown -P "+$(( @timeout@ / 60 + 120 ))"
 trap 'shutdown now' EXIT
+# Everything, errors and the trace included, to stdout: cloud-init shows it on
+# the serial console, readable with `aws ec2 get-console-output` even after
+# the machine is gone.
+exec 2>&1
 
 export HOME=/root
 export DEBIAN_FRONTEND=noninteractive
@@ -35,7 +39,11 @@ fi
 mount -o remount,noinit_itable /
 
 apt-get update -y
-apt-get install -y git curl jq python3 awscli
+apt-get install -y git curl jq python3 unzip
+# Ubuntu 24.04 has no awscli package: the AWS CLI comes from Amazon's installer.
+curl -sSf "https://awscli.amazonaws.com/awscli-exe-linux-$(uname -m).zip" -o /tmp/awscli.zip
+unzip -q /tmp/awscli.zip -d /tmp && /tmp/aws/install
+aws --version
 
 # The benchmark runs on the machine's local NVMe disks when it has them (the
 # instance store of c6id, i4i and the like): formatted here, striped into one
