@@ -27,8 +27,8 @@ It runs exactly like `../tpch` (see its README): a power run, the 13 queries
 back to back in one session from a cold start, timed end to end, with the same
 engine scripts, driver and comparison, and this suite's schema, queries and
 generator. The `-s3` engines read `s3://pivotlake-benchmarks/ssb/sf<N>` (or
-`S3_DATA=s3://bucket/prefix`), which holds SF1 (the first `-s3` run at
-another scale factor adds it), the way the TPC-H README's
+`S3_DATA=s3://bucket/prefix`), which holds SF1, SF100 and SF1000 (the first
+`-s3` run at another scale factor adds it), the way the TPC-H README's
 [Reading from S3](../tpch/README.md#reading-from-s3) describes.
 
 ## Data
