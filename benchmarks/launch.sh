@@ -16,7 +16,8 @@
 #   key                  the benchmark's name in the S3 path: tpch-sf100, clickbench
 #   engine               the database's engine directory in that benchmark
 #   repo, branch         GitHub repository (owner/name) and branch to clone
-#   run_id, run_url, date  the workflow run and its day, for the S3 path
+#   run_id, run_url      the workflow run
+#   run                  its place in S3: <date>/<time>-<run id>
 #   bucket               S3 bucket the machine uploads to
 #   instance_profile     IAM instance profile that may write to the bucket
 #   disk                 root volume, GB (default 500)
@@ -27,7 +28,7 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 : "${database:?}" "${machine:?}" "${benchmark:?}" "${key:?}" "${engine:?}" "${repo:?}" "${branch:?}"
-: "${run_id:?}" "${run_url:?}" "${date:?}" "${bucket:?}" "${instance_profile:?}" "${AWS_REGION:?}"
+: "${run_id:?}" "${run_url:?}" "${run:?}" "${bucket:?}" "${instance_profile:?}" "${AWS_REGION:?}"
 : "${sf:=}" "${disk:=500}" "${timeout:=18000}"
 
 arch=$(aws ec2 describe-instance-types --instance-types "$machine" \
@@ -42,7 +43,7 @@ python3 - cloud-init.sh.in "$user_data" <<'PY'
 import os, sys
 template, out = sys.argv[1:]
 text = open(template).read()
-for name in ("database", "machine", "benchmark", "sf", "key", "engine", "repo", "branch", "run_id", "run_url", "date",
+for name in ("database", "machine", "benchmark", "sf", "key", "engine", "repo", "branch", "run_id", "run_url", "run", "date",
              "bucket", "timeout", "AWS_REGION"):
     text = text.replace(f"@{name}@", os.environ.get(name, ""))
 open(out, "w").write(text)

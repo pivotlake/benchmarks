@@ -17,7 +17,7 @@ Parameters:
     Description: create the GitHub OIDC provider ('false' if the account already has token.actions.githubusercontent.com)
   BucketName:
     Type: String
-    Default: ''
+    Default: pivotbench
     Description: results bucket name (empty for a generated one)
 
 Conditions:
@@ -120,6 +120,9 @@ Resources:
               - Effect: Allow
                 Action: [s3:ListBucket, s3:GetObject]
                 Resource: [!GetAtt ResultsBucket.Arn, !Sub '${ResultsBucket.Arn}/*']
+              - Effect: Allow   # promoting a validated result to latest/
+                Action: s3:PutObject
+                Resource: !Sub '${ResultsBucket.Arn}/latest/*'
 
 Outputs:
   # Output names must be alphanumeric; the README's command turns them into

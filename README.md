@@ -10,14 +10,16 @@ engine and prints one comparison:
 - [`benchmarks/clickbench/`](benchmarks/clickbench): ClickBench, through ClickBench's own harness
   (our fork, which carries the pivot entries, as a submodule).
 
-[`website/`](website) shows the results the way ClickBench's site does: one JSON
-per system and machine under `website/results/<benchmark>/<system>/`, baked into
-`website/data.js` by `website/generate-results.sh`.
+[`website/`](website) shows the results the way ClickBench's site does, at
+pivotbench.io. The results live in S3, one JSON per system, machine and scale
+factor, which `website/pull-results.sh` syncs into `website/results/` and bakes
+into `website/data.js`; neither is in the repository. The Deploy Web workflow
+does that and publishes the site.
 
 `benchmarks/run-and-collect.sh` runs chosen benchmarks on chosen databases and
 writes their results into the website. The Benchmark workflow (Actions, "Run
 workflow") launches an EC2 machine per database that runs it for the branch
-you pick, waits for them and commits the results to that branch; see
+you pick, waits for them and puts the results in S3; see
 [`.github/workflows/`](.github/workflows) for how it works and the AWS setup.
 
 TPC-H and SSB are scored as a power run: after loading, each engine is

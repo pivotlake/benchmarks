@@ -1,9 +1,10 @@
 # Benchmarks on AWS machines, from the branch the workflow is started from
 # ("Use workflow from"). One job per database, machine type, benchmark and
 # scale factor launches an EC2 machine (benchmarks/launch.sh), waits for it to
-# finish and terminate itself, downloads what it uploaded to S3 and keeps that
-# as an artifact; then one job commits every result file to the branch and
-# bakes the website. See README.md here for the setup.
+# finish and terminate itself, downloads what it uploaded to S3, keeps that as
+# an artifact and, when the run succeeded, promotes its result file to the
+# bucket's latest/, which the website is built from (Deploy Web). See
+# README.md here for the setup.
 
 name: Benchmark
 
@@ -45,7 +46,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.plan.outputs.matrix }}
-      date: ${{ steps.plan.outputs.date }}
+      run: ${{ steps.plan.outputs.run }}
     steps:
       - uses: actions/checkout@v4
       - name: Check the AWS setup
@@ -84,7 +85,8 @@ jobs:
           done
           [ "$(jq length <<< "$jobs")" -gt 0 ] || { echo "::error::Nothing to run for these inputs"; exit 1; }
           echo "matrix=$(jq -c '{include: .}' <<< "$jobs")" >> "$GITHUB_OUTPUT"
-          echo "date=$(date -u +%F)" >> "$GITHUB_OUTPUT"
+          # The run's place in S3 under each database: <date>/<time>-<run id>, so runs sort by time.
+          echo "run=$(date -u +%F)/$(date -u +%H%M%S)-${{ github.run_id }}" >> "$GITHUB_OUTPUT"
           jq -r '.[] | "\(.key): \(.database) on \(.machine)"' <<< "$jobs"
 
   run:
@@ -101,7 +103,7 @@ jobs:
     env:
       AWS_REGION: ${{ vars.AWS_REGION }}
       bucket: ${{ vars.RESULTS_BUCKET }}
-      date: ${{ needs.plan.outputs.date }}
+      run: ${{ needs.plan.outputs.run }}
       run_id: ${{ github.run_id }}
       key: ${{ matrix.key }}
       database: ${{ matrix.database }}
@@ -127,13 +129,13 @@ jobs:
           branch: ${{ github.ref_name }}
           run_url: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           instance_profile: ${{ vars.INSTANCE_PROFILE }}
-        run: benchmarks/launch.sh
+        run: date="${run%%/*}" benchmarks/launch.sh
 
       - name: Wait for the machine to finish
         env:
           instance_id: ${{ steps.launch.outputs.instance_id }}
         run: |
-          echo "waiting for $instance_id; its upload will be at s3://$bucket/$date/$run_id/$key/$database/$machine/"
+          echo "waiting for $instance_id; its upload will be at s3://$bucket/$database/$run/$key/$machine/"
           while :; do
             state=$(aws ec2 describe-instances --instance-ids "$instance_id" \
               --query 'Reservations[0].Instances[0].State.Name' --output text 2>/dev/null || echo gone)
@@ -143,21 +145,29 @@ jobs:
           done
 
       - name: Download its results
+        id: download
         run: |
-          dir="out/$key/$database/$machine"
-          aws s3 cp --recursive "s3://$bucket/$date/$run_id/$key/$database/$machine/" "$dir/"
+          dir="out/$key/$machine"
+          aws s3 cp --recursive "s3://$bucket/$database/$run/$key/$machine/" "$dir/"
           [ -f "$dir/meta.json" ] || { echo "::error::The machine uploaded no meta.json: it died before finishing. See the logs in the artifact, if any."; exit 1; }
           jq . "$dir/meta.json"
           {
             echo "### $key: $database on $machine"
-            echo "- \`s3://$bucket/$date/$run_id/$key/$database/$machine/\`"
+            echo "- \`s3://$bucket/$database/$run/$key/$machine/\`"
             echo "- disk: $(jq -r .disk "$dir/meta.json"); result: $(jq -r '.path // "none"' "$dir/meta.json")"
           } >> "$GITHUB_STEP_SUMMARY"
           status=$(jq -r .status "$dir/meta.json")
           [ "$status" = 0 ] || { echo "::error::run-and-collect.sh exited $status on the machine; see run.log in the artifact."; exit 1; }
           [ -f "$dir/result.json" ] || { echo "::error::The run produced no result file; see run.log in the artifact."; exit 1; }
+          echo "path=$(jq -r .path "$dir/meta.json")" >> "$GITHUB_OUTPUT"
 
-      - name: Keep them as an artifact
+      # Only a validated result replaces the one the website shows.
+      - name: Promote the result to latest/
+        run: |
+          aws s3 cp "out/$key/$machine/result.json" "s3://$bucket/latest/${{ steps.download.outputs.path }}"
+          echo "- now the latest result for this database, benchmark and machine" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Keep the upload as an artifact
         if: always() && steps.launch.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
@@ -168,46 +178,3 @@ jobs:
       - name: Terminate the machine if the job was cancelled
         if: cancelled() && steps.launch.outputs.instance_id != ''
         run: aws ec2 terminate-instances --instance-ids "${{ steps.launch.outputs.instance_id }}"
-
-  commit:
-    name: Commit the results
-    needs: [plan, run]
-    if: always() && needs.plan.result == 'success'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/download-artifact@v4
-        with:
-          pattern: results-*
-          path: collected/
-          merge-multiple: true
-
-      - name: Commit and push
-        env:
-          branch: ${{ github.ref_name }}
-          run_url: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: |
-          # Every machine's result.json goes where its meta.json says.
-          find collected -name meta.json | while read -r meta; do
-            dir=$(dirname "$meta")
-            path=$(jq -r '.path // empty' "$meta")
-            [ -n "$path" ] && [ -f "$dir/result.json" ] || continue
-            mkdir -p "website/results/$(dirname "$path")"
-            cp "$dir/result.json" "website/results/$path"
-            echo "$path"
-          done
-          website/generate-results.sh
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add website/results website/data.js
-          if git diff --cached --quiet; then
-            echo "::warning::No result files came back from the machines; nothing to commit."
-            exit 0
-          fi
-          git commit -m "Results: ${{ inputs.benchmarks }} on ${{ inputs.databases }} (${{ inputs.machines }}, SF ${{ inputs.scale_factors }})" -m "Run: $run_url"
-          git pull --rebase origin "$branch"
-          git push origin "HEAD:$branch"
-          echo "Committed $(git rev-parse --short HEAD) to $branch" >> "$GITHUB_STEP_SUMMARY"

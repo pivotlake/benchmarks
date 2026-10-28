@@ -7,7 +7,7 @@
 #
 # The machine clones the branch, runs run-and-collect.sh for one database on
 # one benchmark (at one scale factor) and uploads what it produced to
-# s3://<bucket>/<date>/<run id>/<benchmark>[-sf<N>]/<database>/<machine>/:
+# s3://<bucket>/<database>/<date>/<time>-<run id>/<benchmark>[-sf<N>]/<machine>/:
 #   result.json            the result file (missing if the run produced none)
 #   <engine>.log           the harness log
 #   run.log, cloud-init-output.log
@@ -28,7 +28,7 @@ export DEBIAN_FRONTEND=noninteractive
 export AWS_DEFAULT_REGION='@AWS_REGION@'
 log=/root/run.log
 out=/root/out
-s3_dir='s3://@bucket@/@date@/@run_id@/@key@/@database@/@machine@'
+s3_dir='s3://@bucket@/@database@/@run@/@key@/@machine@'
 
 # Loads of the bigger scale factors want headroom beyond RAM.
 if [ ! -f /swapfile ]; then

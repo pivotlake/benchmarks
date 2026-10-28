@@ -1,0 +1,125 @@
+name: Deploy Web
+
+# Publishes the website to pivotbench.io: the current results are pulled from
+# the bucket's latest/ (website/pull-results.sh) and baked into data.js on a
+# GitHub-hosted runner, which is the one with AWS access; the site box's
+# runner then rsyncs the site into the docroot nginx serves, the way the pivot
+# and cloud repos publish pivotlake.io. Run by hand.
+#
+# Repository variables:
+#   AWS_ROLE_ARN, AWS_REGION, RESULTS_BUCKET
+#                        the bucket the results are in, as for Benchmark
+#   PIVOT_SITE_SSH_HOST  where to publish, e.g. deploy@pivotlake-prod
+#   GCP_PROJECT, GCP_RUNNER_X86, GCP_RUNNER_ZONE
+#                        the GCP project, VM name and zone of the runner box
+#   BENCH_SITE_DOCROOT   the directory nginx serves for pivotbench.io,
+#                        e.g. /var/www/pivotbench.io
+#   BENCH_SITE_BASE_URL  optional, defaults to https://pivotbench.io
+# Repository secret (as in the pivot and cloud repos):
+#   GCP_SA_KEY           GCP key that brings the runner VM online
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-web
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build the site from S3
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write   # to assume the launcher role, which may read the bucket
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+          role-session-name: pivot-benchmarks-deploy-${{ github.run_id }}
+      - name: Pull the results and bake data.js
+        run: |
+          website/pull-results.sh "${{ vars.RESULTS_BUCKET }}"
+          [ -s website/data.js ] || { echo "::error::No data.js was produced."; exit 1; }
+          echo "$(find website/results -name '*.json' | wc -l) results" >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: site
+          path: |
+            website/
+            !website/*.sh
+          if-no-files-found: error
+
+  # Resume the GCP VM so its runners come online before the deploy dispatches.
+  start-ci:
+    name: Start GCP runner
+    runs-on: ubuntu-latest
+    steps:
+      - uses: pivotlake/pivot/.github/actions/resume-gcp-runner@main
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+          project: ${{ vars.GCP_PROJECT }}
+          instance: ${{ vars.GCP_RUNNER_X86 }}
+          zone: ${{ vars.GCP_RUNNER_ZONE }}
+
+  deploy:
+    name: Deploy the site
+    needs: [build, start-ci]
+    runs-on: gcp-builder
+    env:
+      SSH_HOST: ${{ vars.PIVOT_SITE_SSH_HOST }}
+      DOCROOT: ${{ vars.BENCH_SITE_DOCROOT }}
+      SITE_URL: ${{ vars.BENCH_SITE_BASE_URL || 'https://pivotbench.io' }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: site
+          path: site/
+
+      # Checked before anything is uploaded, including the runner's own SSH
+      # identity, which is ambient rather than configured here.
+      - name: Check the deploy configuration
+        run: |
+          set -euo pipefail
+          missing=
+          [ -n "$SSH_HOST" ] || missing="$missing\n  PIVOT_SITE_SSH_HOST (variable): user@host to publish to, e.g. deploy@pivotlake-prod"
+          [ -n "$DOCROOT" ] || missing="$missing\n  BENCH_SITE_DOCROOT (variable): the directory nginx serves for pivotbench.io, e.g. /var/www/pivotbench.io"
+          if [ -n "$missing" ]; then
+            printf "::error::Deploying the site is not configured yet. Set:%b\n" "$missing"
+            exit 1
+          fi
+          command -v rsync >/dev/null 2>&1 ||
+            { echo "::error::rsync is not installed on this runner."; exit 1; }
+          ssh -o BatchMode=yes "$SSH_HOST" true ||
+            { echo "::error::This runner cannot open an SSH session to $SSH_HOST. Its ~/.ssh needs a key the site accepts and a known_hosts entry for it."; exit 1; }
+          [ -f site/index.html ] && [ -f site/data.js ] ||
+            { echo "::error::The site artifact is missing index.html or data.js."; exit 1; }
+
+      # The artifact is the whole site and nothing else lives in the docroot,
+      # so `--delete` keeps the two identical.
+      - name: Publish the site
+        run: |
+          set -euo pipefail
+          rsync --recursive --links --compress --delete --chmod=D755,F644 site/ "$SSH_HOST:$DOCROOT/"
+
+      # What the site actually serves, reached the way a person reaches it.
+      - name: Verify what the site serves
+        run: |
+          set -euo pipefail
+          fail_hint="The upload succeeded, so the files are on the box. Check that $SITE_URL resolves to it, that 80/443 are open, and that nginx serves $DOCROOT for it."
+          status=$(curl --silent --show-error --user-agent "Mozilla/5.0" \
+            --output served-index.html --write-out '%{http_code}' "$SITE_URL/") || true
+          [ "$status" = "200" ] ||
+            { echo "::error::$SITE_URL/ answered $status. $fail_hint"; exit 1; }
+          cmp --silent site/index.html served-index.html ||
+            { echo "::error::$SITE_URL/ serves something other than the built index.html."; exit 1; }
+          curl --fail --silent --show-error --output served-data.js "$SITE_URL/data.js" ||
+            { echo "::error::$SITE_URL/data.js is not served."; exit 1; }
+          cmp --silent site/data.js served-data.js ||
+            { echo "::error::$SITE_URL/data.js is not the data.js just built."; exit 1; }
+          echo "$SITE_URL serves the page and $(grep -c '"benchmark"' site/data.js) results."
+
+  # NOTE: no stop job. The runner VM runs an hourly suspend-if-unused cron that
+  # only takes the box down when no run is active.
