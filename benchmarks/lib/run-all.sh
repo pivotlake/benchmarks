@@ -15,6 +15,8 @@
 #
 # Usage: ./run-all.sh <scale factor> [engine ...]
 #   DATA_DIR       where datasets go (default ./datasets)
+#   DATASETS_URL   fetch datasets from <url>/<suite>/sf<N> instead of generating,
+#                  when there is one (see lib/dataset.sh)
 #   PIVOT_BINARY   run a pivot you built instead of the latest release
 #   BENCH_TIMEOUT  seconds the whole power run may take (default 3600)
 
@@ -45,9 +47,13 @@ data_dir="${DATA_DIR:-$PWD/datasets}"
 dataset="$data_dir/sf$sf"
 results="$PWD/results/sf$sf"
 
+# The dataset: from S3 when DATASETS_URL names a bucket that has it (built
+# there by lib/dataset.sh), generated and rewritten here otherwise.
 if [ ! -d "$dataset" ]; then
-    data/generate.sh "$sf" "$data_dir/generated-sf$sf"
-    "$lib/pivot-style.sh" pivot/create.sql "$data_dir/generated-sf$sf" "$dataset"
+    if [ -z "${DATASETS_URL:-}" ] || ! "$lib/dataset.sh" fetch "$PWD" "$sf" "$dataset" "$DATASETS_URL/$suite/sf$sf"; then
+        data/generate.sh "$sf" "$data_dir/generated-sf$sf"
+        "$lib/pivot-style.sh" pivot/create.sql "$data_dir/generated-sf$sf" "$dataset"
+    fi
 fi
 
 mkdir -p "$results"

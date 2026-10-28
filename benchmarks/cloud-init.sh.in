@@ -29,6 +29,7 @@ export DEBIAN_FRONTEND=noninteractive
 # 1024 open files fails their load. The hard limit is 1048576 on Ubuntu.
 ulimit -n "$(ulimit -Hn)"
 export AWS_DEFAULT_REGION='@AWS_REGION@'
+export DATASETS_URL='s3://@bucket@/datasets'   # TPC-H and SSB datasets built by lib/dataset.sh
 log=/root/run.log
 out=/root/out
 s3_dir='s3://@bucket@/@database@/@run@/@key@/@machine@'
