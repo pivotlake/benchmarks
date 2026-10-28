@@ -87,8 +87,9 @@ status=${PIPESTATUS[0]}
 echo "Finished: $(date '+%F %T'), ${SECONDS}s, exit $status" | tee -a "$log"
 
 mkdir -p "$out"
-# The one result file the run wrote, and where it goes on the website.
-result=$(git ls-files --others --modified --exclude-standard website/results | head -n1)
+# The one result file the run wrote, and where it goes on the website:
+# website/results/ is not in the repository, so whatever is there is the run's.
+result=$(find website/results -name '*.json' | head -n1)
 path=""
 if [ -n "$result" ]; then
     cp "$result" "$out/result.json"
