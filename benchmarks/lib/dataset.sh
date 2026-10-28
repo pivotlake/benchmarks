@@ -26,6 +26,12 @@ case "${1:-}" in
 build)
     [ $# -eq 4 ] || usage
     suite="$2" sf="$3" url="${4%/}"
+    # Prove the upload will work before the hour of building: the sync needs
+    # to list the prefix and write to it. (`aws s3 ls` of an empty prefix
+    # exits 1 silently, so only an error message counts as a failure.)
+    denied=$(aws s3 ls "$url/" 2>&1 >/dev/null) || true
+    [ -z "$denied" ] && echo probe | aws s3 cp - "$url/.probe" && aws s3 rm --quiet "$url/.probe" ||
+        { echo "cannot list and write $url with these credentials: ${denied:-the probe write or delete failed}; nothing built" >&2; exit 1; }
     cd "$suite"
     work="$PWD/datasets"
     generated="$work/generated-sf$sf" out="$work/sf$sf"

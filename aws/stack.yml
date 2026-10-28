@@ -62,8 +62,8 @@ Resources:
               - Effect: Allow
                 Action: s3:PutObject
                 Resource: !Sub '${ResultsBucket.Arn}/*'
-              - Effect: Allow   # the datasets, built by lib/dataset.sh
-                Action: [s3:GetObject, s3:ListBucket]
+              - Effect: Allow   # the datasets, built and fetched by lib/dataset.sh
+                Action: [s3:GetObject, s3:ListBucket, s3:DeleteObject]
                 Resource: [!GetAtt ResultsBucket.Arn, !Sub '${ResultsBucket.Arn}/datasets/*']
   MachineInstanceProfile:
     Type: AWS::IAM::InstanceProfile
