@@ -1,0 +1,681 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>pivot benchmarks</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --color: #1b1b1f;
+            --title-color: #111;
+            --muted-color: #6b6b73;
+            --background-color: white;
+
+            --link-color: #1a6fd6;
+            --link-hover-color: #0b8a7a;
+            --name-lightness: 0.48;
+
+            --selector-text-color: #1b1b1f;
+            --selector-background-color: #EEEEF0;
+            --selector-hover-background-color: #E0E0E4;
+            --selector-active-text-color: #0b3d38;
+            --selector-active-background-color: #B9E6DE;
+            --selector-active-hover-background-color: #9FDBD0;
+
+            --segment-active-background-color: #0f766e;
+            --segment-active-text-color: white;
+            --segment-border-color: #cfd3d8;
+
+            --summary-every-other-row-color: #F7F7F9;
+            --highlight-color: #EBEBEF;
+
+            /* The same value at four scales, 1x, 10x, 100x, 1000x: deep teal to pale. */
+            --bar-color1: oklch(0.45 0.10 215);
+            --bar-color2: oklch(0.63 0.10 210);
+            --bar-color3: oklch(0.79 0.08 205);
+            --bar-color4: oklch(0.91 0.05 200);
+
+            --tooltip-text-color: white;
+            --tooltip-background-color: #222;
+            --nothing-selected-color: #CCC;
+            --shadow-color: rgba(0, 0, 0, 0.3);
+        }
+
+        [data-theme="dark"] {
+            --color: #d4d4d8;
+            --title-color: white;
+            --muted-color: #9a9aa3;
+            --background-color: #16181d;
+
+            --link-color: #7fb4ff;
+            --link-hover-color: #5fd6c4;
+            --name-lightness: 0.8;
+
+            --selector-text-color: #e4e4e8;
+            --selector-background-color: #2a2d34;
+            --selector-hover-background-color: #383c45;
+            --selector-active-text-color: white;
+            --selector-active-background-color: #0f766e;
+            --selector-active-hover-background-color: #14968b;
+
+            --segment-active-background-color: #2dd4bf;
+            --segment-active-text-color: #0b1f1c;
+            --segment-border-color: #3a3e47;
+
+            --summary-every-other-row-color: #1c1f25;
+            --highlight-color: #2a2d34;
+
+            --bar-color1: oklch(0.85 0.10 200);
+            --bar-color2: oklch(0.70 0.10 205);
+            --bar-color3: oklch(0.55 0.09 210);
+            --bar-color4: oklch(0.40 0.07 215);
+
+            --tooltip-text-color: white;
+            --tooltip-background-color: #3a3e47;
+            --nothing-selected-color: #555;
+            --shadow-color: black;
+        }
+
+        html, body {
+            color: var(--color);
+            background-color: var(--background-color);
+            margin: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            font-size: 15px;
+            padding: 1% 3% 2rem 3%;
+        }
+        h1 { color: var(--title-color); font-size: 1.9rem; font-weight: 600; margin: 0.5rem 0 0.5rem 0; }
+        h2 { font-weight: 600; font-size: 1.3rem; }
+        a, a:visited { text-decoration: none; color: var(--link-color); cursor: pointer; }
+        a:hover { color: var(--link-hover-color); }
+        .themes { float: right; font-size: 170%; cursor: pointer; user-select: none; }
+        #toggle-dark, #toggle-light { padding-right: 0.5rem; }
+        #toggle-dark:hover, #toggle-light:hover { display: inline-block; transform: translate(1px, 1px); }
+
+        table { border-spacing: 1px; }
+
+        /* Benchmark switch: a segmented control. */
+        .segmented {
+            display: inline-flex;
+            margin: 1.25rem 0 0 0;
+            border: 1px solid var(--segment-border-color);
+            border-radius: 0.6rem;
+            overflow: hidden;
+            user-select: none;
+        }
+        .segmented a {
+            color: var(--selector-text-color);
+            padding: 0.45rem 1.4rem;
+            font-weight: 600;
+            background: var(--background-color);
+            border-right: 1px solid var(--segment-border-color);
+        }
+        .segmented a:last-child { border-right: 0; }
+        .segmented a:hover { background: var(--selector-hover-background-color); color: var(--selector-text-color); }
+        .segmented a.active, .segmented a.active:hover {
+            background: var(--segment-active-background-color);
+            color: var(--segment-active-text-color);
+        }
+
+        .selectors-container { padding: 1.5rem 0 1.5rem 0; user-select: none; }
+        .selectors-container th {
+            text-align: left;
+            vertical-align: top;
+            white-space: nowrap;
+            padding-top: 0.5rem;
+            padding-right: 1rem;
+            font-weight: 600;
+        }
+        .selector {
+            display: inline-block;
+            margin-left: 0.1rem;
+            padding: 0.2rem 0.55rem;
+            background: var(--selector-background-color);
+            color: var(--selector-text-color);
+            border: 0.2rem solid var(--background-color);
+            border-radius: 0.5rem;
+        }
+        .selector:hover { color: var(--selector-text-color); background: var(--selector-hover-background-color); }
+        .selector-active { color: var(--selector-active-text-color); background: var(--selector-active-background-color); }
+        .selector-active:hover { color: var(--selector-active-text-color); background: var(--selector-active-hover-background-color); }
+        .selector-hint { color: var(--muted-color); font-size: 80%; margin-left: 0.5rem; }
+
+        #summary-table { width: 100%; }
+        #summary-table th { padding-bottom: 0.5rem; font-weight: 600; }
+        #scale_hint { font-weight: normal; font-size: 80%; color: var(--muted-color); }
+        #summary tr:nth-child(odd) { background: var(--summary-every-other-row-color); }
+        .summary-row:hover { background: var(--highlight-color) !important; font-weight: 600; }
+        .summary-name { white-space: nowrap; text-align: right; padding-right: 1rem; }
+        .summary-bar-cell { width: 100%; position: relative; }
+        .summary-bar { height: 1rem; width: 100%; border-radius: 2px; }
+        .summary-date {
+            position: absolute;
+            right: 0.5rem;
+            top: 0;
+            bottom: 0;
+            display: flex;
+            align-items: center;
+            font-size: 78%;
+            font-family: ui-monospace, Menlo, Consolas, monospace;
+            -webkit-text-stroke: 2px var(--background-color);
+            paint-order: stroke fill;
+            pointer-events: none;
+        }
+        .summary-number {
+            font-family: ui-monospace, Menlo, Consolas, monospace;
+            text-align: right;
+            padding-left: 1rem;
+            white-space: nowrap;
+        }
+        .summary-failed { color: #c0392b; }
+
+        #nothing-selected { display: none; font-size: 32pt; font-weight: 600; color: var(--nothing-selected-color); padding: 1rem 0; }
+
+        #details { padding-bottom: 1rem; }
+        #details th { vertical-align: bottom; white-space: pre; font-weight: 600; padding-bottom: 0.4rem; }
+        #details td {
+            white-space: pre;
+            font-family: ui-monospace, Menlo, Consolas, monospace;
+            font-size: 13px;
+            text-align: right;
+            padding: 0.1rem 0.5rem;
+        }
+        #details .details-query {
+            position: sticky;
+            left: 0;
+            z-index: 1;
+            background-color: var(--background-color);
+            outline: 1px solid var(--background-color);
+        }
+        #details .details-query::before {
+            content: '';
+            position: absolute;
+            top: -1px; bottom: -1px; right: 100%;
+            width: 100vw;
+            background-color: var(--background-color);
+        }
+        .shadow:hover { box-shadow: 0 0 0.8rem var(--shadow-color); position: relative; }
+
+        .note { position: relative; display: inline-block; }
+        .tooltip {
+            position: absolute;
+            bottom: calc(100% + 0.5rem);
+            visibility: hidden;
+            background-color: var(--tooltip-background-color);
+            color: var(--tooltip-text-color);
+            box-shadow: 0 0 1rem var(--shadow-color);
+            padding: 0.5rem 0.75rem;
+            border-radius: 0.5rem;
+            z-index: 3;
+            text-align: left;
+            white-space: pre-wrap;
+            font-family: ui-monospace, Menlo, Consolas, monospace;
+            font-size: 12px;
+            line-height: 1.35;
+        }
+        .tooltip-query { left: 0; width: 44rem; max-height: 26rem; overflow: auto; }
+        .note:hover .tooltip, .note:active .tooltip { visibility: visible; }
+        .tooltip::after {
+            content: " ";
+            position: absolute;
+            top: 100%;
+            left: 0.5rem;
+            border-width: 0.5rem;
+            border-style: solid;
+            border-color: var(--tooltip-background-color) transparent transparent transparent;
+        }
+        .footnote { color: var(--muted-color); font-size: 85%; max-width: 70rem; }
+    </style>
+</head>
+<body>
+<div class="header">
+    <span class="themes"><span id="toggle-dark" title="Dark theme">🌚</span><span id="toggle-light" title="Light theme">🌞</span></span>
+    <h1>pivot benchmarks</h1>
+    <a href="https://github.com/pivotlake/benchmarks#readme">Methodology</a> |
+    <a href="https://github.com/pivotlake/benchmarks">Reproduce and Validate the Results</a> |
+    <a href="https://pivotlake.io">pivotlake.io</a>
+</div>
+
+<div class="segmented" id="benchmarks"></div>
+
+<table class="selectors-container">
+    <tr><th>System: </th><td id="selectors_system"></td></tr>
+    <tr><th>Type: </th><td id="selectors_type"></td></tr>
+    <tr><th>Machine: </th><td id="selectors_machine"></td></tr>
+    <tr id="selectors-sf-row"><th>Scale factor: </th><td id="selectors_sf"></td></tr>
+    <tr><th>Metric: </th><td id="selectors_metric"></td></tr>
+</table>
+
+<table id="summary-table" class="comparison">
+    <thead>
+        <tr>
+            <th class="summary-name">System &amp; Machine</th>
+            <th colspan="2"><span id="summary-title">Relative time (lower is better).</span><br/><span id="scale_hint"></span></th>
+        </tr>
+    </thead>
+    <tbody id="summary"></tbody>
+</table>
+<div id="nothing-selected">Nothing selected</div>
+
+<div class="comparison">
+    <h2>Detailed Comparison</h2>
+</div>
+<table id="details" class="comparison">
+    <thead><tr id="details_head"></tr></thead>
+    <tbody id="details_body"></tbody>
+</table>
+<p class="footnote comparison" id="footnote"></p>
+
+<script src="data.js"></script>
+<script>
+const BENCHMARKS = {
+    clickbench: {
+        name: 'ClickBench',
+        metrics: { cold: 'Cold Run', hot: 'Hot Run', load: 'Load Time', size: 'Storage Size' },
+        defaultMetric: 'hot',
+        queryName: i => `Q${i}.`,
+        footnote: "ClickBench's harness: every query runs three times after a restart with the page cache dropped; the first try is the cold time, the best of the other two the hot time. The score is the geometric mean over the queries of (time + 10ms) / (fastest time + 10ms). A query that failed counts as twice the slowest result of that system, and at least 600s.",
+    },
+    ssb: {
+        name: 'SSB',
+        metrics: { power: 'Power Run', load: 'Load Time', size: 'Storage Size' },
+        defaultMetric: 'power',
+        queryName: i => `Q${['1.1', '1.2', '1.3', '2.1', '2.2', '2.3', '3.1', '3.2', '3.3', '3.4', '4.1', '4.2', '4.3'][i] ?? i}`,
+        footnote: 'A power run: after loading, the engine is restarted with the page cache dropped, then runs the 13 Star Schema Benchmark queries back to back in one session, timed from the first query\'s start to the last one\'s end. That time is the score; a query that fails ends the run without one.',
+    },
+    tpch: {
+        name: 'TPC-H',
+        metrics: { power: 'Power Run', load: 'Load Time', size: 'Storage Size' },
+        defaultMetric: 'power',
+        queryName: i => `Q${i + 1}.`,
+        footnote: 'A power run: after loading, the engine is restarted with the page cache dropped, then runs the 22 TPC-H queries back to back in one session, timed from the first query\'s start to the last one\'s end. That time is the score; a query that fails ends the run without one.',
+    },
+};
+
+const constant_time_add = 0.01;
+const missing_result_penalty = 2;
+const missing_result_time = 300;
+
+const uniq = xs => [...new Set(xs)];
+const entriesOf = b => data.filter(e => e.benchmark === b);
+const $ = id => document.getElementById(id);
+
+/* ---------- state ---------- */
+let selectors;
+
+function defaults(b) {
+    const es = entriesOf(b);
+    const sfs = uniq(es.map(e => e.scale_factor).filter(x => x != null));
+    const map = keys => Object.fromEntries(keys.map(k => [k, true]));
+    return {
+        benchmark: b,
+        metric: BENCHMARKS[b].defaultMetric,
+        sf: sfs.length ? Math.max(...sfs) : null,
+        system: map(uniq(es.map(e => e.system))),
+        type: map(uniq(es.flatMap(e => e.tags || []))),
+        machine: map(uniq(es.map(e => e.machine))),
+    };
+}
+
+function loadState() {
+    try {
+        const raw = JSON.parse(decodeURIComponent(escape(atob(location.hash.slice(1)))));
+        if (raw && BENCHMARKS[raw.b] && entriesOf(raw.b).length) {
+            const d = defaults(raw.b);
+            const apply = (map, list) => { if (Array.isArray(list)) Object.keys(map).forEach(k => map[k] = list.includes(k)); };
+            apply(d.system, raw.s); apply(d.type, raw.t); apply(d.machine, raw.mc);
+            if (BENCHMARKS[raw.b].metrics[raw.m]) d.metric = raw.m;
+            if (raw.sf != null) d.sf = raw.sf;
+            return d;
+        }
+    } catch (e) { /* no or bad hash */ }
+    const first = Object.keys(BENCHMARKS).find(b => entriesOf(b).length) || 'clickbench';
+    return defaults(first);
+}
+
+function updateHistory() {
+    const on = map => Object.keys(map).filter(k => map[k]);
+    const raw = { b: selectors.benchmark, m: selectors.metric, sf: selectors.sf,
+        s: on(selectors.system), t: on(selectors.type), mc: on(selectors.machine) };
+    history.replaceState(null, '', '#' + btoa(unescape(encodeURIComponent(JSON.stringify(raw)))));
+}
+
+/* ---------- colors ---------- */
+/// A hue for a system's name, the same on every page: FNV-1a over the name, seeded so the
+/// engines here land well apart on the wheel.
+function nameToColor(str) {
+    let x = 3765;
+    for (let i = 0; i < str.length; i++) {
+        x ^= str.charCodeAt(i);
+        x = Math.imul(x, 16777619) >>> 0;
+    }
+    return x % 360;
+}
+
+/// Cells: mint at the fastest, through straw at 2x and salmon at 10x, to a deep red past 100x.
+const cell_stops = [[0, [196, 236, 206]], [Math.log10(2), [249, 240, 172]], [1, [246, 150, 118]], [2, [142, 40, 48]]];
+
+function colorize(elem, ratio) {
+    let rgb;
+    if (ratio === null) {
+        rgb = [142, 40, 48];
+    } else {
+        const x = Math.max(0, Math.log10(ratio));
+        let i = 0;
+        while (i < cell_stops.length - 2 && x > cell_stops[i + 1][0]) i++;
+        const [x0, c0] = cell_stops[i], [x1, c1] = cell_stops[i + 1];
+        const t = Math.min(1, (x - x0) / (x1 - x0));
+        rgb = c0.map((c, k) => c + (c1[k] - c) * t);
+    }
+    const dim = document.documentElement.getAttribute('data-theme') == 'dark' ? 0.6 : 1;
+    elem.style.backgroundColor = `rgb(${rgb.map(c => Math.round(c * dim)).join(', ')})`;
+    elem.style.color = (ratio === null || ratio > 20) ? 'white' : (dim < 1 ? '#eee' : '#1b1b1f');
+}
+
+function barGradient(percentage) {
+    const stop = zoom => Math.min(100, percentage * zoom);
+    return `linear-gradient(to right,
+        var(--bar-color1) 0%, var(--bar-color1) ${stop(1)}%,
+        var(--bar-color2) ${stop(1)}%, var(--bar-color2) ${stop(10)}%,
+        var(--bar-color3) ${stop(10)}%, var(--bar-color3) ${stop(100)}%,
+        var(--bar-color4) ${stop(100)}%, var(--bar-color4) ${stop(1000)}%,
+        transparent ${stop(1000)}%, transparent 100%)`;
+}
+
+/* ---------- scoring ---------- */
+const hotOf = tries => {
+    const rest = tries.slice(1).filter(t => t != null);
+    return tries[0] == null || !rest.length ? null : Math.min(...rest);
+};
+
+/// Each query's time of an entry, for the metric: ClickBench's cold or hot try, or the power run's time.
+function queryTimes(elem, metric) {
+    if (elem.benchmark === 'clickbench') return elem.result.map(tries => metric === 'cold' ? tries[0] : hotOf(tries));
+    return elem.result;
+}
+
+/// The entry's value for the metric and its ratio to the best among `filtered`: for ClickBench's cold and hot runs the
+/// geometric mean of the per-query ratios, with a penalty for a missing result, as on ClickBench's site.
+function summarize(filtered, metric) {
+    const key = { load: 'load_time', size: 'data_size', power: 'power_run' }[metric];
+    if (key) {
+        const values = filtered.map(e => e[key]);
+        const positive = values.filter(v => v != null && v > 0);
+        const baseline = positive.length ? Math.min(...positive) : 1;
+        return filtered.map((e, i) => {
+            const v = values[i];
+            const ratio = v == null ? null : v > 0 ? v / baseline : 1;
+            return { ratio, value: v, text: summaryText(e, metric, v, ratio) };
+        });
+    }
+    const times = filtered.map(e => queryTimes(e, metric));
+    const num_queries = Math.max(0, ...times.map(t => t.length));
+    const baseline = [...Array(num_queries).keys()].map(q => {
+        const ok = times.map(t => t[q]).filter(t => t != null);
+        return ok.length ? Math.min(...ok) : null;
+    });
+    return filtered.map((e, i) => {
+        const own = times[i].filter(t => t != null);
+        const fallback = missing_result_penalty * Math.max(missing_result_time, ...own);
+        let acc = 0, used = 0;
+        for (let q = 0; q < num_queries; q++) {
+            if (baseline[q] == null) continue;
+            const t = times[i][q] ?? fallback;
+            acc += Math.log((constant_time_add + t) / (constant_time_add + baseline[q]));
+            used++;
+        }
+        const ratio = used ? Math.exp(acc / used) : null;
+        return { ratio, text: summaryText(e, metric, null, ratio) };
+    });
+}
+
+function summaryText(elem, metric, value, ratio) {
+    const x = ratio == null ? '' : `(×${ratio.toFixed(2)})`;
+    if (metric === 'load') return elem.load_time ? `${Math.round(elem.load_time)}s ${x}` : 'stateless';
+    if (metric === 'size') return `${(elem.data_size / 1024 / 1024 / 1024).toFixed(2)} GiB ${x}`;
+    if (metric === 'power') {
+        if (value == null) {
+            const failed = elem.result.findIndex(t => t == null);
+            return `☠ failed at ${BENCHMARKS[elem.benchmark].queryName(failed).replace(/\.$/, '')}`;
+        }
+        return `${value < 100 ? value.toFixed(1) : Math.round(value)}s ${x}`;
+    }
+    return ratio == null ? '—' : `×${ratio.toFixed(2)}`;
+}
+
+/* ---------- rendering ---------- */
+function filteredData() {
+    return entriesOf(selectors.benchmark).filter(e =>
+        selectors.system[e.system] &&
+        selectors.machine[e.machine] &&
+        (e.tags || []).some(t => selectors.type[t]) &&
+        (selectors.sf == null || e.scale_factor === selectors.sf));
+}
+
+function renderBenchmarks() {
+    const box = $('benchmarks');
+    box.innerHTML = '';
+    Object.entries(BENCHMARKS).filter(([b]) => entriesOf(b).length).forEach(([b, cfg]) => {
+        const a = document.createElement('a');
+        a.textContent = cfg.name;
+        a.className = b === selectors.benchmark ? 'active' : '';
+        a.addEventListener('click', () => { selectors = defaults(b); render(); updateHistory(); });
+        box.appendChild(a);
+    });
+}
+
+function makeSelector(label, active, onToggle, onOnly) {
+    const a = document.createElement('a');
+    a.textContent = label;
+    a.className = active ? 'selector selector-active' : 'selector';
+    a.addEventListener('click', e => (e.ctrlKey || e.metaKey) && onOnly ? onOnly() : onToggle());
+    if (onOnly) a.addEventListener('contextmenu', e => { e.preventDefault(); onOnly(); });
+    return a;
+}
+
+function renderSelectorRow(id, map) {
+    const td = $(id);
+    td.innerHTML = '';
+    const keys = Object.keys(map);
+    const all_on = keys.every(k => map[k]);
+    td.appendChild(makeSelector('All', all_on, () => {
+        const on = keys.filter(k => map[k]).length * 2 < keys.length;
+        keys.forEach(k => map[k] = on);
+        render(); updateHistory();
+    }));
+    keys.forEach(k => td.appendChild(makeSelector(k, map[k],
+        () => { map[k] = !map[k]; render(); updateHistory(); },
+        () => { keys.forEach(o => map[o] = o === k); render(); updateHistory(); })));
+}
+
+function renderSelectors() {
+    const b = selectors.benchmark;
+    renderSelectorRow('selectors_system', selectors.system);
+    renderSelectorRow('selectors_type', selectors.type);
+    renderSelectorRow('selectors_machine', selectors.machine);
+
+    const sfs = uniq(entriesOf(b).map(e => e.scale_factor).filter(x => x != null)).sort((x, y) => x - y);
+    $('selectors-sf-row').style.display = sfs.length ? '' : 'none';
+    const sf_td = $('selectors_sf');
+    sf_td.innerHTML = '';
+    sfs.forEach(sf => sf_td.appendChild(makeSelector(`SF${sf}`, sf === selectors.sf, () => { selectors.sf = sf; render(); updateHistory(); })));
+
+    const m_td = $('selectors_metric');
+    m_td.innerHTML = '';
+    Object.entries(BENCHMARKS[b].metrics).forEach(([k, label]) =>
+        m_td.appendChild(makeSelector(label, k === selectors.metric, () => { selectors.metric = k; render(); updateHistory(); })));
+    const hint = document.createElement('span');
+    hint.className = 'selector-hint';
+    hint.textContent = 'Ctrl-click or right-click a selector to choose only it.';
+    m_td.appendChild(hint);
+}
+
+function entryTitle(elem) {
+    return `${elem.system} (${elem.machine})`;
+}
+
+function renderSummary(filtered, summaries, order) {
+    const metric = selectors.metric;
+    const table = $('summary');
+    table.innerHTML = '';
+    $('summary-title').textContent = metric === 'size' ? 'Relative data size (lower is better).'
+        : metric === 'load' ? 'Relative load time (lower is better).'
+        : metric === 'power' ? 'Power run, relative time (lower is better).'
+        : 'Relative time (lower is better).';
+    $('scale_hint').textContent = 'Different colors on the bar chart represent the same values shown at different scales (1x, 10x, 100x zoom)';
+
+    const max_ratio = 10000;
+    order.forEach(idx => {
+        const elem = filtered[idx], s = summaries[idx];
+        const tr = document.createElement('tr');
+        tr.className = 'summary-row';
+
+        const td_name = document.createElement('td');
+        td_name.className = 'summary-name';
+        const name = document.createElement('span');
+        name.textContent = entryTitle(elem);
+        name.style.color = `oklch(var(--name-lightness) 0.17 ${nameToColor(elem.system.split(' ')[0])})`;
+        td_name.appendChild(name);
+        td_name.appendChild(document.createTextNode(': '));
+
+        const td_bar = document.createElement('td');
+        td_bar.className = 'summary-bar-cell';
+        const bar = document.createElement('div');
+        bar.className = 'summary-bar';
+        if (s.ratio != null) bar.style.background = barGradient(s.ratio / max_ratio * 100);
+        td_bar.appendChild(bar);
+        if (elem.date) {
+            const date = document.createElement('span');
+            date.className = 'summary-date';
+            date.textContent = elem.date;
+            td_bar.appendChild(date);
+        }
+
+        const td_number = document.createElement('td');
+        td_number.className = 'summary-number' + (s.ratio == null ? ' summary-failed' : '');
+        td_number.textContent = s.text;
+
+        tr.appendChild(td_name); tr.appendChild(td_bar); tr.appendChild(td_number);
+        table.appendChild(tr);
+    });
+}
+
+function detailsRow(title, cells) {
+    const tr = document.createElement('tr');
+    tr.className = 'shadow';
+    const td_title = document.createElement('td');
+    td_title.className = 'details-query';
+    td_title.appendChild(typeof title === 'string' ? document.createTextNode(title) : title);
+    tr.appendChild(td_title);
+    cells.forEach(cell => {
+        const td = document.createElement('td');
+        td.textContent = cell.text;
+        if (cell.ratio !== undefined) colorize(td, cell.ratio);
+        tr.appendChild(td);
+    });
+    return tr;
+}
+
+function renderDetails(filtered, order) {
+    const b = selectors.benchmark, cfg = BENCHMARKS[b], metric = selectors.metric;
+    const head = $('details_head'), body = $('details_body');
+    head.innerHTML = ''; body.innerHTML = '';
+    const sorted = order.map(i => filtered[i]);
+    const num_queries = Math.max(0, ...sorted.map(e => e.result.length));
+
+    /// Header: the row titles' column, then one column per entry.
+    const th_title = document.createElement('th');
+    th_title.className = 'details-query';
+    head.appendChild(th_title);
+    sorted.forEach(elem => {
+        const th = document.createElement('th');
+        th.textContent = `${elem.system}\n(${elem.machine})`;
+        head.appendChild(th);
+    });
+
+    const ratioCells = (values, format, { min_baseline = 0 } = {}) => {
+        const ok = values.filter(v => v != null && v > min_baseline);
+        const baseline = ok.length ? Math.min(...ok) : null;
+        return values.map(v => v == null ? { text: '☠', ratio: null }
+            : { text: format(v, baseline ? v / baseline : 1), ratio: baseline ? v / baseline : 1 });
+    };
+
+    if (b !== 'clickbench') {
+        body.appendChild(detailsRow('Power run: ', ratioCells(sorted.map(e => e.power_run),
+            (v, r) => `${v < 100 ? v.toFixed(1) : Math.round(v)}s (×${r.toFixed(2)})`)));
+    }
+    body.appendChild(detailsRow('Load time: ', sorted.map(e => e.load_time).some(x => x) ? ratioCells(sorted.map(e => e.load_time),
+        (v, r) => v ? `${Math.round(v)}s (×${r.toFixed(2)})` : '0', { min_baseline: 5 }) : sorted.map(() => ({ text: '0' }))));
+    body.appendChild(detailsRow('Data size: ', ratioCells(sorted.map(e => e.data_size),
+        (v, r) => `${(v / 1024 / 1024 / 1024).toFixed(2)} GiB (×${r.toFixed(2)})`)));
+
+    const which = metric === 'cold' ? 'cold' : 'hot';
+    const times = sorted.map(e => queryTimes(e, which));
+    const sql = queries[b] || [];
+    const width = Math.max(...[...Array(num_queries).keys()].map(q => cfg.queryName(q).length)) + 1;
+    for (let q = 0; q < num_queries; q++) {
+        const name = document.createElement('span');
+        name.className = 'note';
+        name.appendChild(document.createTextNode(cfg.queryName(q).padStart(width)));
+        if (sql[q]) {
+            const tip = document.createElement('span');
+            tip.className = 'tooltip tooltip-query';
+            tip.textContent = sql[q];
+            name.appendChild(tip);
+        }
+        const ok = times.map(t => t[q]).filter(t => t != null);
+        const baseline = ok.length ? Math.min(...ok) : null;
+        const cells = times.map(t => {
+            const v = t[q];
+            if (v == null) return { text: '☠', ratio: null };
+            const ratio = (constant_time_add + v) / (constant_time_add + baseline);
+            return { text: `${v.toFixed(3)}s (×${ratio.toFixed(2)})`, ratio };
+        });
+        body.appendChild(detailsRow(name, cells));
+    }
+    $('footnote').textContent = cfg.footnote;
+}
+
+function render() {
+    renderBenchmarks();
+    renderSelectors();
+    const filtered = filteredData();
+    const nothing = !filtered.length;
+    $('nothing-selected').style.display = nothing ? 'block' : 'none';
+    [...document.querySelectorAll('.comparison')].forEach(e => e.style.display = nothing ? 'none' : '');
+    if (nothing) return;
+    const summaries = summarize(filtered, selectors.metric);
+    const order = [...filtered.keys()].sort((a, b) =>
+        (summaries[a].ratio == null) - (summaries[b].ratio == null) ||
+        (summaries[a].ratio ?? 0) - (summaries[b].ratio ?? 0) ||
+        entryTitle(filtered[a]).localeCompare(entryTitle(filtered[b])));
+    renderSummary(filtered, summaries, order);
+    renderDetails(filtered, order);
+}
+
+/* ---------- theme ---------- */
+function setTheme(theme) {
+    document.documentElement.setAttribute('data-theme', theme);
+    try { localStorage.setItem('theme', theme); } catch (e) { /* storage unavailable */ }
+    render();
+}
+$('toggle-dark').addEventListener('click', () => setTheme('dark'));
+$('toggle-light').addEventListener('click', () => setTheme('light'));
+try {
+    const saved = localStorage.getItem('theme');
+    if (saved) document.documentElement.setAttribute('data-theme', saved);
+    else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) document.documentElement.setAttribute('data-theme', 'dark');
+} catch (e) { /* storage unavailable */ }
+
+selectors = loadState();
+render();
+window.addEventListener('hashchange', () => { selectors = loadState(); render(); });
+</script>
+</body>
+</html>

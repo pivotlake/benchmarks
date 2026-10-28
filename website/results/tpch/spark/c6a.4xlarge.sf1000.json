@@ -1,0 +1,41 @@
+{
+    "benchmark": "tpch",
+    "system": "Apache Spark",
+    "date": "2026-10-19",
+    "machine": "c6a.4xlarge",
+    "tags": [
+        "Java",
+        "column-oriented",
+        "Parquet",
+        "stateless"
+    ],
+    "comment": "",
+    "load_time": 0,
+    "data_size": 324000000000,
+    "scale_factor": 1000,
+    "result": [
+        269.537,
+        70.84,
+        269.625,
+        93.196,
+        180.497,
+        61.004,
+        307.442,
+        199.016,
+        617.614,
+        328.142,
+        43.538,
+        155.829,
+        270.677,
+        94.443,
+        107.933,
+        116.986,
+        160.601,
+        478.654,
+        113.285,
+        79.013,
+        null,
+        null
+    ],
+    "power_run": null
+}

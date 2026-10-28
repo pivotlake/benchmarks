@@ -1,0 +1,32 @@
+{
+    "benchmark": "ssb",
+    "system": "ClickHouse (Parquet)",
+    "date": "2026-10-14",
+    "machine": "c6a.metal",
+    "tags": [
+        "C++",
+        "column-oriented",
+        "Parquet",
+        "stateless"
+    ],
+    "comment": "",
+    "load_time": 0,
+    "data_size": 25200000000,
+    "scale_factor": 100,
+    "result": [
+        1.12,
+        0.658,
+        0.824,
+        3.38,
+        1.836,
+        0.984,
+        1.62,
+        2.098,
+        1.494,
+        1.02,
+        3.848,
+        1.502,
+        0.996
+    ],
+    "power_run": 22.4
+}

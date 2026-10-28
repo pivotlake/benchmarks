@@ -1,27 +1,32 @@
 # Datasets, generators and results
-/*/datasets/
-/*/results/
-/ssb/data/ssb-dbgen/
-/clickbench/data/
+/benchmarks/*/datasets/
+/benchmarks/*/results/
+/benchmarks/ssb/data/ssb-dbgen/
+/benchmarks/clickbench/data/
 
 # What the engines' scripts create in their directories
-/*/*/tmp/
-/*/*/*.db
-/*/*/tables.sql
-/*/pivot/catalog/
-/*/pivot/config.yaml
-/*/pivot/server.log
-/*/pivot/server.pid
-/*/clickhouse/clickhouse
-/*/clickhouse/access/
-/*/clickhouse/data/
-/*/clickhouse/preprocessed_configs/
-/*/clickhouse/server.log
-/*/clickhouse/server.pid
-/*/clickhouse-parquet/clickhouse
-/*/datafusion/bin/
-/*/datafusion/.crates.toml
-/*/datafusion/.crates2.json
-/*/spark/myenv
-/*/starrocks/StarRocks-*
-/*/starrocks/.sr_dir
+/benchmarks/*/*/tmp/
+/benchmarks/*/*/*.db
+/benchmarks/*/*/tables.sql
+/benchmarks/*/pivot/catalog/
+/benchmarks/*/pivot/config.yaml
+/benchmarks/*/pivot/server.log
+/benchmarks/*/pivot/server.pid
+/benchmarks/*/clickhouse/clickhouse
+/benchmarks/*/clickhouse/access/
+/benchmarks/*/clickhouse/data/
+/benchmarks/*/clickhouse/preprocessed_configs/
+/benchmarks/*/clickhouse/server.log
+/benchmarks/*/clickhouse/server.pid
+/benchmarks/*/clickhouse-parquet/clickhouse
+/benchmarks/*/datafusion/bin/
+/benchmarks/*/datafusion/.crates.toml
+/benchmarks/*/datafusion/.crates2.json
+/benchmarks/*/spark/myenv
+/benchmarks/*/starrocks/StarRocks-*
+/benchmarks/*/starrocks/.sr_dir
+
+# Editors
+/.idea/
+.DS_Store
+__pycache__/

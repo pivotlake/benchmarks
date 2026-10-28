@@ -1,0 +1,41 @@
+{
+    "benchmark": "tpch",
+    "system": "ClickHouse (Parquet)",
+    "date": "2026-10-14",
+    "machine": "c6a.metal",
+    "tags": [
+        "C++",
+        "column-oriented",
+        "Parquet",
+        "stateless"
+    ],
+    "comment": "",
+    "load_time": 0,
+    "data_size": 324000000000,
+    "scale_factor": 1000,
+    "result": [
+        46.734,
+        18.47,
+        53.406,
+        12.423,
+        40.874,
+        11.373,
+        18.405,
+        31.528,
+        59.254,
+        45.794,
+        4.012,
+        13.57,
+        48.438,
+        13.278,
+        16.804,
+        8.528,
+        19.814,
+        88.609,
+        19.628,
+        26.586,
+        44.459,
+        16.113
+    ],
+    "power_run": 671.9
+}

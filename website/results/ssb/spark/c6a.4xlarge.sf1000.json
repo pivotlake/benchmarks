@@ -1,0 +1,32 @@
+{
+    "benchmark": "ssb",
+    "system": "Apache Spark",
+    "date": "2026-10-21",
+    "machine": "c6a.4xlarge",
+    "tags": [
+        "Java",
+        "column-oriented",
+        "Parquet",
+        "stateless"
+    ],
+    "comment": "",
+    "load_time": 0,
+    "data_size": 252000000000,
+    "scale_factor": 1000,
+    "result": [
+        157.024,
+        82.098,
+        43.436,
+        254.064,
+        157.262,
+        133.656,
+        220.915,
+        181.007,
+        163.115,
+        165.018,
+        211.58,
+        null,
+        null
+    ],
+    "power_run": null
+}

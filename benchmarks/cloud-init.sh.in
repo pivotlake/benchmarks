@@ -1,0 +1,102 @@
+#!/bin/bash -x
+#
+# What a benchmark machine runs at first boot, as root, unattended; launch.sh
+# fills in the @variables@. Whatever happens, the machine shuts down (and,
+# launched with terminate-on-shutdown, terminates): a deadline systemd keeps
+# even if this script hangs, and a trap for early exits.
+#
+# The machine clones the branch, runs run-and-collect.sh for one database on
+# one benchmark (at one scale factor) and uploads what it produced to
+# s3://<bucket>/<date>/<run id>/<benchmark>[-sf<N>]/<database>/<machine>/:
+#   result.json            the result file (missing if the run produced none)
+#   <engine>.log           the harness log
+#   run.log, cloud-init-output.log
+#   meta.json              what ran, the exit status, and `path`: where
+#                          result.json goes under website/results/; written
+#                          last, so its presence means the upload is complete
+# The workflow's run job waits for the machine to terminate, then downloads that.
+
+shutdown -P "+$(( @timeout@ / 60 + 120 ))"
+trap 'shutdown now' EXIT
+
+export HOME=/root
+export DEBIAN_FRONTEND=noninteractive
+export AWS_DEFAULT_REGION='@AWS_REGION@'
+log=/root/run.log
+out=/root/out
+s3_dir='s3://@bucket@/@date@/@run_id@/@key@/@database@/@machine@'
+
+# Loads of the bigger scale factors want headroom beyond RAM.
+if [ ! -f /swapfile ]; then
+    fallocate -l 16G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile
+fi
+# The root filesystem was just grown to the whole volume; stop ext4 zeroing
+# the new inode tables in the background while the benchmark runs.
+mount -o remount,noinit_itable /
+
+apt-get update -y
+apt-get install -y git curl jq python3 awscli
+
+# The benchmark runs on the machine's local NVMe disks when it has them (the
+# instance store of c6id, i4i and the like): formatted here, striped into one
+# volume when there are several, mounted, and the clone made on them, so the
+# dataset, the engine's storage and its spill files are all there. Without
+# them everything is on the root volume.
+work=/root
+disk="root volume"
+disks=$(lsblk -dpno NAME,MODEL | awk '/Instance Storage/ { print $1 }')
+if [ -n "$disks" ]; then
+    n=$(wc -w <<< "$disks")
+    if [ "$n" -gt 1 ]; then
+        apt-get install -y mdadm
+        # shellcheck disable=SC2086
+        mdadm --create /dev/md0 --level=0 --raid-devices="$n" --force --run $disks
+        dev=/dev/md0
+    else
+        dev=$disks
+    fi
+    mkfs.ext4 -F -E lazy_itable_init=0,lazy_journal_init=0 "$dev"
+    mkdir -p /mnt/bench && mount -o noatime "$dev" /mnt/bench
+    work=/mnt/bench
+    disk="$n local NVMe $(lsblk -dno SIZE "$dev" | tr -d ' ')$([ "$n" -gt 1 ] && echo ' RAID 0')"
+fi
+cd "$work"
+
+git clone --branch '@branch@' --recurse-submodules 'https://github.com/@repo@.git' repo
+cd repo
+
+{
+    echo "Machine: @machine@"
+    echo "Disk: $disk"
+    echo "Branch: @branch@"
+    echo "Run: @run_url@"
+    echo "Started: $(date '+%F %T')"
+} | tee -a "$log"
+
+timeout @timeout@ benchmarks/run-and-collect.sh \
+    --databases '@database@' --benchmarks '@benchmark@' --sf '@sf@' --machine '@machine@' 2>&1 | tee -a "$log"
+status=${PIPESTATUS[0]}
+echo "Finished: $(date '+%F %T'), ${SECONDS}s, exit $status" | tee -a "$log"
+
+mkdir -p "$out"
+# The one result file the run wrote, and where it goes on the website.
+result=$(git ls-files --others --modified --exclude-standard website/results | head -n1)
+path=""
+if [ -n "$result" ]; then
+    cp "$result" "$out/result.json"
+    path="${result#website/results/}"
+fi
+if [ '@benchmark@' = clickbench ]; then harness_log='benchmarks/clickbench/results/@engine@.log'; else harness_log='benchmarks/@benchmark@/results/sf@sf@/@engine@.log'; fi
+[ ! -f "$harness_log" ] || cp "$harness_log" "$out/@engine@.log"
+cp "$log" "$out/run.log"
+cp /var/log/cloud-init-output.log "$out/cloud-init-output.log"
+aws s3 cp --recursive "$out" "$s3_dir/"
+jq -n --arg branch '@branch@' --arg database '@database@' --arg machine '@machine@' --arg benchmark '@benchmark@' \
+      --arg sf '@sf@' --arg engine '@engine@' --arg disk "$disk" --arg path "$path" --arg run_id '@run_id@' \
+      --arg run_url '@run_url@' --arg date '@date@' --argjson status "$status" \
+      '{branch: $branch, database: $database, machine: $machine, benchmark: $benchmark,
+        scale_factor: (if $sf == "" then null else ($sf | tonumber) end), engine: $engine, disk: $disk,
+        path: (if $path == "" then null else $path end), run_id: $run_id, run_url: $run_url, date: $date, status: $status}' |
+    aws s3 cp - "$s3_dir/meta.json"
+
+shutdown now

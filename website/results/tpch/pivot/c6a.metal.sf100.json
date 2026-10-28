@@ -1,0 +1,41 @@
+{
+    "benchmark": "tpch",
+    "system": "pivot",
+    "date": "2026-10-12",
+    "machine": "c6a.metal",
+    "tags": [
+        "Rust",
+        "column-oriented",
+        "Parquet",
+        "stateless"
+    ],
+    "comment": "",
+    "load_time": 0,
+    "data_size": 32400000000,
+    "scale_factor": 100,
+    "result": [
+        1.642,
+        0.232,
+        1.403,
+        0.454,
+        0.665,
+        0.283,
+        1.137,
+        1.125,
+        2.447,
+        2.001,
+        0.536,
+        0.986,
+        2.324,
+        0.533,
+        1.011,
+        0.414,
+        1.107,
+        3.679,
+        0.596,
+        0.953,
+        3.109,
+        0.371
+    ],
+    "power_run": 28.1
+}

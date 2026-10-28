@@ -1,0 +1,33 @@
+{
+    "benchmark": "ssb",
+    "system": "DuckDB (Parquet)",
+    "date": "2026-10-12",
+    "machine": "c6a.4xlarge",
+    "tags": [
+        "C++",
+        "column-oriented",
+        "embedded",
+        "Parquet",
+        "stateless"
+    ],
+    "comment": "",
+    "load_time": 0,
+    "data_size": 252000000000,
+    "scale_factor": 1000,
+    "result": [
+        14.239,
+        13.409,
+        12.329,
+        56.106,
+        37.65,
+        23.405,
+        22.759,
+        36.416,
+        34.565,
+        24.228,
+        41.412,
+        39.36,
+        21.222
+    ],
+    "power_run": 385.2
+}

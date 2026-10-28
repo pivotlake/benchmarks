@@ -1,0 +1,42 @@
+{
+    "benchmark": "tpch",
+    "system": "DataFusion",
+    "date": "2026-10-20",
+    "machine": "c6a.4xlarge",
+    "tags": [
+        "Rust",
+        "column-oriented",
+        "embedded",
+        "Parquet",
+        "stateless"
+    ],
+    "comment": "",
+    "load_time": 0,
+    "data_size": 324000000000,
+    "scale_factor": 1000,
+    "result": [
+        41.995,
+        18.02,
+        44.174,
+        17.544,
+        38.031,
+        13.315,
+        65.255,
+        43.786,
+        102.351,
+        37.358,
+        12.348,
+        19.757,
+        30.588,
+        22.93,
+        20.491,
+        15.629,
+        21.808,
+        73.306,
+        20.746,
+        22.629,
+        73.219,
+        16.545
+    ],
+    "power_run": 787.9
+}

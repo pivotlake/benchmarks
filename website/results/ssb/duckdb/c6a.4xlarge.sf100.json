@@ -1,0 +1,31 @@
+{
+    "benchmark": "ssb",
+    "system": "DuckDB",
+    "date": "2026-10-15",
+    "machine": "c6a.4xlarge",
+    "tags": [
+        "C++",
+        "column-oriented",
+        "embedded"
+    ],
+    "comment": "",
+    "load_time": 301.1,
+    "data_size": 28400000000,
+    "scale_factor": 100,
+    "result": [
+        1.148,
+        0.87,
+        0.786,
+        2.141,
+        1.598,
+        1.523,
+        1.592,
+        2.11,
+        2.262,
+        1.167,
+        2.881,
+        1.913,
+        2.778
+    ],
+    "power_run": 23.8
+}

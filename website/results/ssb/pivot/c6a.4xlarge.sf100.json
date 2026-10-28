@@ -1,0 +1,32 @@
+{
+    "benchmark": "ssb",
+    "system": "pivot",
+    "date": "2026-10-19",
+    "machine": "c6a.4xlarge",
+    "tags": [
+        "Rust",
+        "column-oriented",
+        "Parquet",
+        "stateless"
+    ],
+    "comment": "",
+    "load_time": 0,
+    "data_size": 25200000000,
+    "scale_factor": 100,
+    "result": [
+        2.19,
+        0.992,
+        0.689,
+        2.625,
+        1.426,
+        1.402,
+        2.275,
+        1.687,
+        3.774,
+        1.472,
+        3.986,
+        6.795,
+        3.706
+    ],
+    "power_run": 34.3
+}

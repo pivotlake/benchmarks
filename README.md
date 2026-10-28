@@ -4,11 +4,22 @@ Pivot against other engines, on the same machine and the same data, with
 scripts short enough to read. Each benchmark has a `run-all.sh` that runs every
 engine and prints one comparison:
 
-- [`tpch/`](tpch): TPC-H at any scale factor (SF100 and SF1000 are the usual
+- [`benchmarks/tpch/`](benchmarks/tpch): TPC-H at any scale factor (SF100 and SF1000 are the usual
   ones), on parquet files written by pivot.
-- [`ssb/`](ssb): the Star Schema Benchmark on the same kind of data.
-- [`clickbench/`](clickbench): ClickBench, through ClickBench's own harness
+- [`benchmarks/ssb/`](benchmarks/ssb): the Star Schema Benchmark on the same kind of data.
+- [`benchmarks/clickbench/`](benchmarks/clickbench): ClickBench, through ClickBench's own harness
   (our fork, which carries the pivot entries, as a submodule).
+
+[`website/`](website) shows the results the way ClickBench's site does: one JSON
+per system and machine under `website/results/<benchmark>/<system>/`, baked into
+`website/data.js` by `website/generate-results.sh`. (The results there are
+placeholders for now.)
+
+`benchmarks/run-and-collect.sh` runs chosen benchmarks on chosen databases and
+writes their results into the website. The Benchmark workflow (Actions, "Run
+workflow") launches an EC2 machine per database that runs it for the branch
+you pick, waits for them and commits the results to that branch; see
+[`.github/workflows/`](.github/workflows) for how it works and the AWS setup.
 
 TPC-H and SSB are scored as a power run: after loading, each engine is
 restarted with the page cache dropped, then runs every query back to back in
@@ -29,14 +40,14 @@ install packages) and plenty of local disk.
 ```sh
 git clone --recurse-submodules https://github.com/pivotlake/benchmarks.git
 cd benchmarks
-tpch/run-all.sh 100                  # every engine at TPC-H SF100
-ssb/run-all.sh 1000 pivot duckdb     # two engines at SSB SF1000
-clickbench/run-all.sh                # the default ClickBench systems
+benchmarks/tpch/run-all.sh 100                  # every engine at TPC-H SF100
+benchmarks/ssb/run-all.sh 1000 pivot duckdb     # two engines at SSB SF1000
+benchmarks/clickbench/run-all.sh                # the default ClickBench systems
 ```
 
-`tpch/` and `ssb/` each hold their queries, a data generator and one directory
-per engine with ClickBench's small scripts plus `power`; `lib/` holds what they
-share: the power-run driver (`power-run.sh`), `run-all.sh`, the pivot-style
+`benchmarks/tpch/` and `benchmarks/ssb/` each hold their queries, a data
+generator and one directory per engine with ClickBench's small scripts plus
+`power`; `benchmarks/lib/` holds what they share: the power-run driver (`power-run.sh`), `run-all.sh`, the pivot-style
 rewrite of the data and the comparison.
 
 The released pivot is installed with `curl https://pivotlake.io | sh`; set

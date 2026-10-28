@@ -1,0 +1,42 @@
+{
+    "benchmark": "tpch",
+    "system": "DuckDB (Parquet)",
+    "date": "2026-10-20",
+    "machine": "c6a.4xlarge",
+    "tags": [
+        "C++",
+        "column-oriented",
+        "embedded",
+        "Parquet",
+        "stateless"
+    ],
+    "comment": "",
+    "load_time": 0,
+    "data_size": 324000000000,
+    "scale_factor": 1000,
+    "result": [
+        57.076,
+        17.333,
+        25.004,
+        14.119,
+        22.134,
+        9.752,
+        23.477,
+        17.65,
+        118.455,
+        48.511,
+        8.339,
+        15.439,
+        35.244,
+        17.959,
+        45.36,
+        11.799,
+        37.669,
+        139.046,
+        13.807,
+        46.163,
+        153.744,
+        25.065
+    ],
+    "power_run": 921.8
+}

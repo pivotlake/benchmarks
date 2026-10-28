@@ -116,9 +116,14 @@ def compare_tries(engines, width):
               f"{score('cold', name):>12.2f}{score('hot', name):>11.2f}{load_and_size(log)}")
 
 
-engines = {pathlib.Path(p).stem: parse(pathlib.Path(p)) for p in sys.argv[1:]}
-width = max(len(name) for name in engines) + 2
-if any(log["power_run"] for log in engines.values()):
-    compare_power(engines, width)
-else:
-    compare_tries(engines, width)
+def main():
+    engines = {pathlib.Path(p).stem: parse(pathlib.Path(p)) for p in sys.argv[1:]}
+    width = max(len(name) for name in engines) + 2
+    if any(log["power_run"] for log in engines.values()):
+        compare_power(engines, width)
+    else:
+        compare_tries(engines, width)
+
+
+if __name__ == "__main__":
+    main()

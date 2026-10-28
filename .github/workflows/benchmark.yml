@@ -1,0 +1,213 @@
+# Benchmarks on AWS machines, from the branch the workflow is started from
+# ("Use workflow from"). One job per database, machine type, benchmark and
+# scale factor launches an EC2 machine (benchmarks/launch.sh), waits for it to
+# finish and terminate itself, downloads what it uploaded to S3 and keeps that
+# as an artifact; then one job commits every result file to the branch and
+# bakes the website. See README.md here for the setup.
+
+name: Benchmark
+
+run-name: "Benchmark ${{ inputs.benchmarks }} on ${{ inputs.databases }} (${{ inputs.machines }}) from ${{ github.ref_name }}"
+
+on:
+  workflow_dispatch:
+    inputs:
+      databases:
+        description: 'Databases, space-separated (pivot duckdb duckdb-parquet clickhouse clickhouse-parquet datafusion spark starrocks)'
+        type: string
+        default: 'pivot duckdb duckdb-parquet clickhouse clickhouse-parquet datafusion spark starrocks'
+      benchmarks:
+        description: 'Benchmarks, space-separated (tpch ssb clickbench)'
+        type: string
+        default: 'tpch ssb clickbench'
+      scale_factors:
+        description: 'TPC-H and SSB scale factors, space-separated (100 1000 runs both)'
+        type: string
+        default: '100 1000'
+      machines:
+        description: 'EC2 instance types, space-separated; everything runs on each. Types with local NVMe (c6id, i4i, ...) benchmark on it'
+        type: string
+        default: 'c6id.4xlarge'
+      disk:
+        description: 'Root volume per machine, GB; only matters on machines without local NVMe (SF1000 with the engines that load their own copy needs a few TB)'
+        type: string
+        default: '500'
+      timeout:
+        description: 'Seconds a machine may spend on its benchmark before it gives up (a job can wait at most 6 hours)'
+        type: string
+        default: '18000'
+
+permissions:
+  contents: read
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+      date: ${{ steps.plan.outputs.date }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check the AWS setup
+        env:
+          AWS_ROLE_ARN: ${{ vars.AWS_ROLE_ARN }}
+          AWS_REGION: ${{ vars.AWS_REGION }}
+          RESULTS_BUCKET: ${{ vars.RESULTS_BUCKET }}
+          INSTANCE_PROFILE: ${{ vars.INSTANCE_PROFILE }}
+        run: |
+          for v in AWS_ROLE_ARN AWS_REGION RESULTS_BUCKET INSTANCE_PROFILE; do
+            [ -n "${!v}" ] || { echo "::error::Repository variable $v is not set; see .github/workflows/README.md"; exit 1; }
+          done
+      - name: One job per database, machine, benchmark and scale factor
+        id: plan
+        env:
+          databases: ${{ inputs.databases }}
+          machines: ${{ inputs.machines }}
+          benchmarks: ${{ inputs.benchmarks }}
+          scale_factors: ${{ inputs.scale_factors }}
+        run: |
+          jobs='[]'
+          for benchmark in $benchmarks; do
+            if [ "$benchmark" = clickbench ]; then sfs=""; else sfs="$scale_factors"; fi
+            for sf in ${sfs:-none}; do
+              [ "$sf" != none ] || sf=""
+              key="$benchmark${sf:+-sf$sf}"
+              for database in $databases; do
+                engine=$(benchmarks/run-and-collect.sh --engine-for "$benchmark" "$database")
+                [ -n "$engine" ] || { echo "$database has no $benchmark entry, skipped"; continue; }
+                for machine in $machines; do
+                  jobs=$(jq -c --arg b "$benchmark" --arg sf "$sf" --arg k "$key" --arg d "$database" --arg e "$engine" --arg m "$machine" \
+                    '. + [{benchmark: $b, sf: $sf, key: $k, database: $d, engine: $e, machine: $m}]' <<< "$jobs")
+                done
+              done
+            done
+          done
+          [ "$(jq length <<< "$jobs")" -gt 0 ] || { echo "::error::Nothing to run for these inputs"; exit 1; }
+          echo "matrix=$(jq -c '{include: .}' <<< "$jobs")" >> "$GITHUB_OUTPUT"
+          echo "date=$(date -u +%F)" >> "$GITHUB_OUTPUT"
+          jq -r '.[] | "\(.key): \(.database) on \(.machine)"' <<< "$jobs"
+
+  run:
+    name: "${{ matrix.key }}: ${{ matrix.database }} on ${{ matrix.machine }}"
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 355
+    permissions:
+      contents: read
+      id-token: write   # to assume the launcher role
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      bucket: ${{ vars.RESULTS_BUCKET }}
+      date: ${{ needs.plan.outputs.date }}
+      run_id: ${{ github.run_id }}
+      key: ${{ matrix.key }}
+      database: ${{ matrix.database }}
+      machine: ${{ matrix.machine }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+          role-session-name: pivot-benchmarks-${{ github.run_id }}-${{ strategy.job-index }}
+
+      - name: Launch the machine
+        id: launch
+        env:
+          benchmark: ${{ matrix.benchmark }}
+          sf: ${{ matrix.sf }}
+          engine: ${{ matrix.engine }}
+          disk: ${{ inputs.disk }}
+          timeout: ${{ inputs.timeout }}
+          repo: ${{ github.repository }}
+          branch: ${{ github.ref_name }}
+          run_url: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          instance_profile: ${{ vars.INSTANCE_PROFILE }}
+        run: benchmarks/launch.sh
+
+      - name: Wait for the machine to finish
+        env:
+          instance_id: ${{ steps.launch.outputs.instance_id }}
+        run: |
+          echo "waiting for $instance_id; its upload will be at s3://$bucket/$date/$run_id/$key/$database/$machine/"
+          while :; do
+            state=$(aws ec2 describe-instances --instance-ids "$instance_id" \
+              --query 'Reservations[0].Instances[0].State.Name' --output text 2>/dev/null || echo gone)
+            [ "$state" != terminated ] && [ "$state" != gone ] || break
+            echo "$(date -u '+%T') $state"
+            sleep 120
+          done
+
+      - name: Download its results
+        run: |
+          dir="out/$key/$database/$machine"
+          aws s3 cp --recursive "s3://$bucket/$date/$run_id/$key/$database/$machine/" "$dir/"
+          [ -f "$dir/meta.json" ] || { echo "::error::The machine uploaded no meta.json: it died before finishing. See the logs in the artifact, if any."; exit 1; }
+          jq . "$dir/meta.json"
+          {
+            echo "### $key: $database on $machine"
+            echo "- \`s3://$bucket/$date/$run_id/$key/$database/$machine/\`"
+            echo "- disk: $(jq -r .disk "$dir/meta.json"); result: $(jq -r '.path // "none"' "$dir/meta.json")"
+          } >> "$GITHUB_STEP_SUMMARY"
+          status=$(jq -r .status "$dir/meta.json")
+          [ "$status" = 0 ] || { echo "::error::run-and-collect.sh exited $status on the machine; see run.log in the artifact."; exit 1; }
+          [ -f "$dir/result.json" ] || { echo "::error::The run produced no result file; see run.log in the artifact."; exit 1; }
+
+      - name: Keep them as an artifact
+        if: always() && steps.launch.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: results-${{ matrix.key }}-${{ matrix.database }}-${{ matrix.machine }}
+          path: out/
+          if-no-files-found: warn
+
+      - name: Terminate the machine if the job was cancelled
+        if: cancelled() && steps.launch.outputs.instance_id != ''
+        run: aws ec2 terminate-instances --instance-ids "${{ steps.launch.outputs.instance_id }}"
+
+  commit:
+    name: Commit the results
+    needs: [plan, run]
+    if: always() && needs.plan.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: results-*
+          path: collected/
+          merge-multiple: true
+
+      - name: Commit and push
+        env:
+          branch: ${{ github.ref_name }}
+          run_url: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          # Every machine's result.json goes where its meta.json says.
+          find collected -name meta.json | while read -r meta; do
+            dir=$(dirname "$meta")
+            path=$(jq -r '.path // empty' "$meta")
+            [ -n "$path" ] && [ -f "$dir/result.json" ] || continue
+            mkdir -p "website/results/$(dirname "$path")"
+            cp "$dir/result.json" "website/results/$path"
+            echo "$path"
+          done
+          website/generate-results.sh
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add website/results website/data.js
+          if git diff --cached --quiet; then
+            echo "::warning::No result files came back from the machines; nothing to commit."
+            exit 0
+          fi
+          git commit -m "Results: ${{ inputs.benchmarks }} on ${{ inputs.databases }} (${{ inputs.machines }}, SF ${{ inputs.scale_factors }})" -m "Run: $run_url"
+          git pull --rebase origin "$branch"
+          git push origin "HEAD:$branch"
+          echo "Committed $(git rev-parse --short HEAD) to $branch" >> "$GITHUB_STEP_SUMMARY"

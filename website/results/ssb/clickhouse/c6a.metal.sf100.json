@@ -1,0 +1,30 @@
+{
+    "benchmark": "ssb",
+    "system": "ClickHouse",
+    "date": "2026-10-16",
+    "machine": "c6a.metal",
+    "tags": [
+        "C++",
+        "column-oriented"
+    ],
+    "comment": "",
+    "load_time": 230.6,
+    "data_size": 21900000000,
+    "scale_factor": 100,
+    "result": [
+        0.236,
+        0.262,
+        0.144,
+        1.108,
+        0.525,
+        0.408,
+        0.931,
+        0.642,
+        0.733,
+        0.31,
+        1.098,
+        0.82,
+        0.453
+    ],
+    "power_run": 8.4
+}

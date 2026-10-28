@@ -1,0 +1,134 @@
+# Everything the Benchmark workflow needs in AWS, as one CloudFormation stack;
+# see .github/workflows/README.md for the commands: a role the workflow assumes
+# to launch machines and read their uploads, a role for the machines to upload,
+# and the bucket they upload to.
+AWSTemplateFormatVersion: '2010-09-09'
+Description: pivot benchmarks - launcher role for GitHub Actions, machine role, results bucket
+
+Parameters:
+  GitHubRepository:
+    Type: String
+    Default: pivotlake/benchmarks
+    Description: owner/name of the repository whose workflows may launch machines
+  CreateOidcProvider:
+    Type: String
+    Default: 'true'
+    AllowedValues: ['true', 'false']
+    Description: create the GitHub OIDC provider ('false' if the account already has token.actions.githubusercontent.com)
+  BucketName:
+    Type: String
+    Default: ''
+    Description: results bucket name (empty for a generated one)
+
+Conditions:
+  CreateProvider: !Equals [!Ref CreateOidcProvider, 'true']
+  NamedBucket: !Not [!Equals [!Ref BucketName, '']]
+
+Resources:
+  GitHubOidcProvider:
+    Type: AWS::IAM::OIDCProvider
+    Condition: CreateProvider
+    Properties:
+      Url: https://token.actions.githubusercontent.com
+      ClientIdList: [sts.amazonaws.com]
+      ThumbprintList: [6938fd4d98bab03faadb97b34396831e3780aea1]   # unused by AWS since 2023 but required by the API
+
+  ResultsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !If [NamedBucket, !Ref BucketName, !Ref AWS::NoValue]
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  # What a benchmark machine may do: upload its results.
+  MachineRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: pivot-benchmarks-machine
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: { Service: ec2.amazonaws.com }
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: upload-results
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: s3:PutObject
+                Resource: !Sub '${ResultsBucket.Arn}/*'
+  MachineInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      InstanceProfileName: pivot-benchmarks-machine
+      Roles: [!Ref MachineRole]
+
+  # What the workflow may do: launch machines with that profile, watch and
+  # terminate them, read the bucket.
+  LauncherRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: pivot-benchmarks-launcher
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !If
+                - CreateProvider
+                - !Ref GitHubOidcProvider
+                - !Sub 'arn:aws:iam::${AWS::AccountId}:oidc-provider/token.actions.githubusercontent.com'
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+              StringLike:
+                # The token's subject names the repository either as owner/name or, with
+                # GitHub's immutable subject claims, as owner@id/name@id.
+                token.actions.githubusercontent.com:sub:
+                  - !Sub 'repo:${GitHubRepository}:*'
+                  - !Sub
+                    - 'repo:${Owner}@*/${Name}@*:*'
+                    - Owner: !Select [0, !Split ['/', !Ref GitHubRepository]]
+                      Name: !Select [1, !Split ['/', !Ref GitHubRepository]]
+      Policies:
+        - PolicyName: launch-benchmarks
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ec2:RunInstances
+                  - ec2:CreateTags
+                  - ec2:DescribeImages
+                  - ec2:DescribeInstanceTypes
+                  - ec2:DescribeInstances
+                Resource: '*'
+              - Effect: Allow
+                Action: ec2:TerminateInstances
+                Resource: '*'
+                Condition:
+                  StringLike: { 'ec2:ResourceTag/Name': 'pivot-benchmarks-*' }
+              - Effect: Allow
+                Action: iam:PassRole
+                Resource: !GetAtt MachineRole.Arn
+              - Effect: Allow
+                Action: [s3:ListBucket, s3:GetObject]
+                Resource: [!GetAtt ResultsBucket.Arn, !Sub '${ResultsBucket.Arn}/*']
+
+Outputs:
+  # Output names must be alphanumeric; the README's command turns them into
+  # the repository variables (AwsRoleArn -> AWS_ROLE_ARN).
+  AwsRoleArn:
+    Value: !GetAtt LauncherRole.Arn
+  AwsRegion:
+    Value: !Ref AWS::Region
+  ResultsBucket:
+    Value: !Ref ResultsBucket
+  InstanceProfile:
+    Value: !Ref MachineInstanceProfile
