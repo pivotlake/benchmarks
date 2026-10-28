@@ -27,6 +27,12 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
+# Many launches at once get throttled by the EC2 API (RequestLimitExceeded):
+# let the CLI back off and pace itself, and start at a random moment within
+# half a minute so parallel jobs don't all call at the same second.
+export AWS_RETRY_MODE=adaptive AWS_MAX_ATTEMPTS=10
+sleep $(( RANDOM % 30 ))
+
 : "${database:?}" "${machine:?}" "${benchmark:?}" "${key:?}" "${engine:?}" "${repo:?}" "${branch:?}"
 : "${run_id:?}" "${run_url:?}" "${run:?}" "${bucket:?}" "${instance_profile:?}" "${AWS_REGION:?}"
 : "${sf:=}" "${disk:=500}" "${timeout:=18000}"
@@ -49,9 +55,9 @@ for name in ("database", "machine", "benchmark", "sf", "key", "engine", "repo", 
 open(out, "w").write(text)
 PY
 
-# Retried while the region is short of capacity or the account of vCPU quota;
-# any other error fails at once.
-retry='InsufficientInstanceCapacity|VcpuLimitExceeded|InstanceLimitExceeded'
+# Retried while the region is short of capacity, the account of vCPU quota, or
+# the EC2 API throttles us; any other error fails at once.
+retry='InsufficientInstanceCapacity|VcpuLimitExceeded|InstanceLimitExceeded|RequestLimitExceeded'
 while :; do
     if out=$(AWS_PAGER='' aws ec2 run-instances --image-id "$ami" --instance-type "$machine" \
             --iam-instance-profile "Name=$instance_profile" \
@@ -64,8 +70,9 @@ while :; do
         break
     fi
     if grep -qE "$retry" <<< "$out"; then
-        echo "run-instances: $(grep -oE "$retry" <<< "$out" | head -n1) for $machine, retrying in 60s" >&2
-        sleep 60
+        wait=$(( 30 + RANDOM % 60 ))
+        echo "run-instances: $(grep -oE "$retry" <<< "$out" | head -n1) for $machine, retrying in ${wait}s" >&2
+        sleep "$wait"
         continue
     fi
     echo "$out" >&2
