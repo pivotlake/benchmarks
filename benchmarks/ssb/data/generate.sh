@@ -9,6 +9,14 @@
 
 set -eu
 
+# The tables become parquet through the DuckDB CLI, installed the way the
+# duckdb engine installs it when the machine has none (a benchmark machine
+# only installs the engine under test).
+if ! command -v duckdb >/dev/null 2>&1; then
+    curl https://install.duckdb.org | sh
+    sudo ln -sf "$HOME/.duckdb/cli/latest/duckdb" /usr/local/bin/duckdb
+fi
+
 sf="$1"
 out=$(realpath -m "$2")
 here=$(cd "$(dirname "$0")" && pwd)
