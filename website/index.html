@@ -246,7 +246,6 @@
 
 <table class="selectors-container">
     <tr><th>System: </th><td id="selectors_system"></td></tr>
-    <tr><th>Type: </th><td id="selectors_type"></td></tr>
     <tr><th>Machine: </th><td id="selectors_machine"></td></tr>
     <tr id="selectors-sf-row"><th>Scale factor: </th><td id="selectors_sf"></td></tr>
     <tr><th>Metric: </th><td id="selectors_metric"></td></tr>
@@ -318,7 +317,6 @@ function defaults(b) {
         metric: BENCHMARKS[b].defaultMetric,
         sf: sfs.length ? Math.max(...sfs) : null,
         system: map(uniq(es.map(e => e.system))),
-        type: map(uniq(es.flatMap(e => e.tags || []))),
         machine: map(uniq(es.map(e => e.machine))),
     };
 }
@@ -329,7 +327,7 @@ function loadState() {
         if (raw && BENCHMARKS[raw.b] && entriesOf(raw.b).length) {
             const d = defaults(raw.b);
             const apply = (map, list) => { if (Array.isArray(list)) Object.keys(map).forEach(k => map[k] = list.includes(k)); };
-            apply(d.system, raw.s); apply(d.type, raw.t); apply(d.machine, raw.mc);
+            apply(d.system, raw.s); apply(d.machine, raw.mc);
             if (BENCHMARKS[raw.b].metrics[raw.m]) d.metric = raw.m;
             if (raw.sf != null) d.sf = raw.sf;
             return d;
@@ -342,7 +340,7 @@ function loadState() {
 function updateHistory() {
     const on = map => Object.keys(map).filter(k => map[k]);
     const raw = { b: selectors.benchmark, m: selectors.metric, sf: selectors.sf,
-        s: on(selectors.system), t: on(selectors.type), mc: on(selectors.machine) };
+        s: on(selectors.system), mc: on(selectors.machine) };
     history.replaceState(null, '', '#' + btoa(unescape(encodeURIComponent(JSON.stringify(raw)))));
 }
 
@@ -454,7 +452,6 @@ function filteredData() {
     return entriesOf(selectors.benchmark).filter(e =>
         selectors.system[e.system] &&
         selectors.machine[e.machine] &&
-        (e.tags || []).some(t => selectors.type[t]) &&
         (selectors.sf == null || e.scale_factor === selectors.sf));
 }
 
@@ -497,7 +494,6 @@ function renderSelectorRow(id, map) {
 function renderSelectors() {
     const b = selectors.benchmark;
     renderSelectorRow('selectors_system', selectors.system);
-    renderSelectorRow('selectors_type', selectors.type);
     renderSelectorRow('selectors_machine', selectors.machine);
 
     const sfs = uniq(entriesOf(b).map(e => e.scale_factor).filter(x => x != null)).sort((x, y) => x - y);
