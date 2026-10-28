@@ -11,7 +11,7 @@ engine and prints one comparison:
   (our fork, which carries the pivot entries, as a submodule).
 
 [`website/`](website) shows the results the way ClickBench's site does, at
-pivotbench.io. The results live in S3, one JSON per system, machine and scale
+benchmark.pivotlake.io. The results live in S3, one JSON per system, machine and scale
 factor, which `website/pull-results.sh` syncs into `website/results/` and bakes
 into `website/data.js`; neither is in the repository. The Deploy Web workflow
 does that and publishes the site.

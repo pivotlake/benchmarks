@@ -1,7 +1,7 @@
 # Benchmark automation
 
 `benchmark.yml` runs the benchmarks on AWS machines and puts the results in S3;
-`deploy-web.yml` builds the website from them and publishes it to pivotbench.io.
+`deploy-web.yml` builds the website from them and publishes it to benchmark.pivotlake.io.
 Both are run by hand from the Actions tab.
 
 ## Benchmark
@@ -60,9 +60,9 @@ The artifact of a run job is that machine's folder, unchanged.
 "Run workflow". A GitHub-hosted job assumes the launcher role, syncs `latest/`
 into `website/results/` and bakes `website/data.js` (`website/pull-results.sh`,
 which also works locally with credentials for the bucket), and hands the site
-to the `gcp-builder` runner, which rsyncs it to `/var/www/pivotbench.io` on the
+to the `gcp-builder` runner, which rsyncs it to `/var/www/benchmark.pivotlake.io` on the
 site box over SSH, the way the pivot and cloud repos publish pivotlake.io, and
-checks what pivotbench.io then serves. The results are not in the repository:
+checks what benchmark.pivotlake.io then serves. The results are not in the repository:
 a deploy publishes whatever `latest/` holds at the time.
 
 ## Setup
@@ -114,5 +114,5 @@ the `timeout` plus two hours whatever happens.
 Deploy Web also needs, as in the pivot and cloud repos: the variables
 `PIVOT_SITE_SSH_HOST`, `GCP_PROJECT`, `GCP_RUNNER_X86`, `GCP_RUNNER_ZONE`, the
 secret `GCP_SA_KEY`, and for this site `BENCH_SITE_DOCROOT` (the directory
-nginx serves for pivotbench.io) and optionally `BENCH_SITE_BASE_URL`. On the
-site box, nginx needs a server block for pivotbench.io serving that directory.
+nginx serves for benchmark.pivotlake.io) and optionally `BENCH_SITE_BASE_URL`. On the
+site box, nginx needs a server block for benchmark.pivotlake.io serving that directory.

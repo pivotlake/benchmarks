@@ -1,6 +1,6 @@
 name: Deploy Web
 
-# Publishes the website to pivotbench.io: the current results are pulled from
+# Publishes the website to benchmark.pivotlake.io: the current results are pulled from
 # the bucket's latest/ (website/pull-results.sh) and baked into data.js on a
 # GitHub-hosted runner, which is the one with AWS access; the site box's
 # runner then rsyncs the site into the docroot nginx serves, the way the pivot
@@ -12,9 +12,9 @@ name: Deploy Web
 #   PIVOT_SITE_SSH_HOST  where to publish, e.g. deploy@pivotlake-prod
 #   GCP_PROJECT, GCP_RUNNER_X86, GCP_RUNNER_ZONE
 #                        the GCP project, VM name and zone of the runner box
-#   BENCH_SITE_DOCROOT   the directory nginx serves for pivotbench.io,
-#                        e.g. /var/www/pivotbench.io
-#   BENCH_SITE_BASE_URL  optional, defaults to https://pivotbench.io
+#   BENCH_SITE_DOCROOT   the directory nginx serves for benchmark.pivotlake.io,
+#                        e.g. /var/www/benchmark.pivotlake.io
+#   BENCH_SITE_BASE_URL  optional, defaults to https://benchmark.pivotlake.io
 # Repository secret (as in the pivot and cloud repos):
 #   GCP_SA_KEY           GCP key that brings the runner VM online
 
@@ -71,7 +71,7 @@ jobs:
     env:
       SSH_HOST: ${{ vars.PIVOT_SITE_SSH_HOST }}
       DOCROOT: ${{ vars.BENCH_SITE_DOCROOT }}
-      SITE_URL: ${{ vars.BENCH_SITE_BASE_URL || 'https://pivotbench.io' }}
+      SITE_URL: ${{ vars.BENCH_SITE_BASE_URL || 'https://benchmark.pivotlake.io' }}
     steps:
       - uses: actions/download-artifact@v4
         with:
@@ -85,7 +85,7 @@ jobs:
           set -euo pipefail
           missing=
           [ -n "$SSH_HOST" ] || missing="$missing\n  PIVOT_SITE_SSH_HOST (variable): user@host to publish to, e.g. deploy@pivotlake-prod"
-          [ -n "$DOCROOT" ] || missing="$missing\n  BENCH_SITE_DOCROOT (variable): the directory nginx serves for pivotbench.io, e.g. /var/www/pivotbench.io"
+          [ -n "$DOCROOT" ] || missing="$missing\n  BENCH_SITE_DOCROOT (variable): the directory nginx serves for benchmark.pivotlake.io, e.g. /var/www/benchmark.pivotlake.io"
           if [ -n "$missing" ]; then
             printf "::error::Deploying the site is not configured yet. Set:%b\n" "$missing"
             exit 1
