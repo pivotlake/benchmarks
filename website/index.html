@@ -299,6 +299,7 @@ const BENCHMARKS = {
 };
 
 const constant_time_add = 0.01;
+const STATELESS_LOAD = 5;   // seconds; a shorter load means the engine reads the files in place
 const missing_result_penalty = 2;
 const missing_result_time = 300;
 
@@ -405,11 +406,14 @@ function summarize(filtered, metric) {
     const key = { load: 'load_time', size: 'data_size', power: 'power_run' }[metric];
     if (key) {
         const values = filtered.map(e => e[key]);
-        const positive = values.filter(v => v != null && v > 0);
+        // An engine that reads the files in place "loads" in the time it takes to
+        // link them, a few hundredths of a second: stateless, not a load to rank.
+        const real = v => v != null && (metric !== 'load' || v >= STATELESS_LOAD);
+        const positive = values.filter(real);
         const baseline = positive.length ? Math.min(...positive) : 1;
         return filtered.map((e, i) => {
             const v = values[i];
-            const ratio = v == null ? null : v > 0 ? v / baseline : 1;
+            const ratio = v == null ? null : real(v) ? v / baseline : 1;
             return { ratio, value: v, text: summaryText(e, metric, v, ratio) };
         });
     }
@@ -436,7 +440,7 @@ function summarize(filtered, metric) {
 
 function summaryText(elem, metric, value, ratio) {
     const x = ratio == null ? '' : `(×${ratio.toFixed(2)})`;
-    if (metric === 'load') return elem.load_time ? `${Math.round(elem.load_time)}s ${x}` : 'stateless';
+    if (metric === 'load') return elem.load_time >= STATELESS_LOAD ? `${Math.round(elem.load_time)}s ${x}` : 'stateless';
     if (metric === 'size') return `${(elem.data_size / 1024 / 1024 / 1024).toFixed(2)} GiB ${x}`;
     if (metric === 'power') {
         if (value == null) {
@@ -608,8 +612,13 @@ function renderDetails(filtered, order) {
             (v, r) => `${v < 100 ? v.toFixed(1) : Math.round(v)}s (×${r.toFixed(2)})`)));
     }
     if (b === 'clickbench') {
-        body.appendChild(detailsRow('Load time: ', sorted.map(e => e.load_time).some(x => x) ? ratioCells(sorted.map(e => e.load_time),
-            (v, r) => v ? `${Math.round(v)}s (×${r.toFixed(2)})` : '0', { min_baseline: 5 }) : sorted.map(() => ({ text: '0' }))));
+        const loads = sorted.map(e => e.load_time);
+        const real = loads.filter(v => v != null && v >= STATELESS_LOAD);
+        const baseline = real.length ? Math.min(...real) : null;
+        body.appendChild(detailsRow('Load time: ', loads.map(v =>
+            v == null ? { text: '☠', ratio: null }
+            : v < STATELESS_LOAD ? { text: 'stateless', ratio: 1 }
+            : { text: `${Math.round(v)}s (×${(v / baseline).toFixed(2)})`, ratio: v / baseline })));
     }
     body.appendChild(detailsRow('Data size: ', ratioCells(sorted.map(e => e.data_size),
         (v, r) => `${(v / 1024 / 1024 / 1024).toFixed(2)} GiB (×${r.toFixed(2)})`)));
