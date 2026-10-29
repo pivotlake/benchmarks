@@ -1,8 +1,9 @@
 # Benchmark automation
 
-`benchmark.yml` runs the benchmarks on AWS machines and puts the results in S3;
-`deploy-web.yml` builds the website from them and publishes it to benchmark.pivotlake.io.
-Both are run by hand from the Actions tab.
+`benchmark.yml` runs the benchmarks on AWS machines, which put their results in
+S3; the site box turns those into the website on its own. `deploy-web.yml`
+publishes the website's page and sets that refresh up. Both are run by hand
+from the Actions tab.
 
 ## Benchmark
 
@@ -16,20 +17,21 @@ c8gd.4xlarge), run. Then:
 2. **run**, one job per combination, all in parallel: the runner assumes the
    launcher role (OIDC: no AWS keys anywhere) and launches an EC2 machine
    (`benchmarks/launch.sh`). The machine runs `benchmarks/cloud-init.sh.in` at
-   boot: clones the branch, runs `benchmarks/run-and-collect.sh` for that one
-   database and benchmark, uploads the result file and logs to S3, terminates
-   itself. The job waits for the termination, downloads the upload, keeps it
-   as the artifact `results-<benchmark>[-sf<N>]-<database>-<machine>` and, if
-   the machine reported success and a result file, copies that file to the
-   bucket's `latest/`. It fails if the machine died, the benchmark failed or
-   produced no result; the artifact is kept either way and `latest/` is left
-   alone. Cancelling the job terminates the machine.
+   boot: clones the branch, fetches the dataset from the bucket when it is
+   there (`benchmarks/lib/dataset.sh`), runs `benchmarks/run-and-collect.sh`
+   for that one database and benchmark, uploads the result file and logs to
+   S3 and, when the run succeeded, copies the result to the bucket's `latest/`;
+   then terminates itself. The job waits for the termination, downloads the
+   upload and keeps it as the artifact
+   `results-<benchmark>[-sf<N>]-<database>-<machine>`. It fails if the machine
+   died, the benchmark failed or produced no result; the artifact is kept
+   either way. Cancelling the job terminates the machine.
 
 A run job can wait at most 6 hours (GitHub's limit); the `timeout` input caps
-the machine below that. A machine that outlives its job still finishes and
-uploads to S3 on its own, so nothing is lost, only not promoted. A default
-run is 37 jobs: eight databases on TPC-H and SSB at two scale factors each
-and on ClickBench, less the combinations that don't exist.
+the machine. A machine that outlives its job still finishes, uploads and
+publishes its result on its own; only the artifact is lost. A default run is
+37 jobs: eight databases on TPC-H and SSB at two scale factors each and on
+ClickBench, less the combinations that don't exist.
 
 Anyone with write access to the repository can run it. Forks cannot: the
 launcher role trusts only this repository's workflow runs.
@@ -48,22 +50,30 @@ s3://<bucket>/
 │               ├── cloud-init-output.log  everything the machine did, from boot
 │               └── meta.json              what ran, the disk, the exit status, and `path`:
 │                                          the file's name under latest/; written last
-└── latest/                          what the website shows: one file per database,
-    └── <benchmark>/<engine>/<machine>[.sf<N>].json   benchmark, machine and scale factor,
-                                     replaced by every run that succeeds
+├── latest/                          what the website shows: one file per database,
+│   └── <benchmark>/<engine>/<machine>[.sf<N>].json   benchmark, machine and scale factor,
+│                                    replaced by every run that succeeds. Public.
+└── datasets/<suite>/sf<N>/          the datasets the machines fetch (lib/dataset.sh)
 ```
 
 The artifact of a run job is that machine's folder, unchanged.
 
-## Deploy Web
+## The website
 
-"Run workflow". A GitHub-hosted job assumes the launcher role, syncs `latest/`
-into `website/results/` and bakes `website/data.js` (`website/pull-results.sh`,
-which also works locally with credentials for the bucket), and hands the site
-to the `gcp-builder` runner, which rsyncs it to `/var/www/benchmark.pivotlake.io` on the
-site box over SSH, the way the pivot and cloud repos publish pivotlake.io, and
-checks what benchmark.pivotlake.io then serves. The results are not in the repository:
-a deploy publishes whatever `latest/` holds at the time.
+The page, `website/index.html`, loads two files beside it: `queries.js`, the
+query texts, baked by Deploy Web from the repository; and `data.js`, the
+results, which the site box rebuilds itself. Deploy Web installs
+`website/refresh-results.sh` and `generate-results.sh` in `~/benchmark-refresh`
+on the box with a cron line every five minutes: the script lists the bucket's
+`latest/` (public, no credentials), and only when a result was added, changed
+or removed since its last run does it sync and rebuild `data.js` into the
+docroot. So a run's results are on the site within five minutes of its
+machines finishing, with nothing to trigger.
+
+"Run workflow" on Deploy Web after changing the page or the scripts: the
+`gcp-builder` runner rsyncs the page to `/var/www/benchmark.pivotlake.io` on
+the site box over SSH, reinstalls the refresh, runs it once and checks what
+benchmark.pivotlake.io serves.
 
 ## Setup
 

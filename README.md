@@ -11,10 +11,11 @@ engine and prints one comparison:
   (our fork, which carries the pivot entries, as a submodule).
 
 [`website/`](website) shows the results the way ClickBench's site does, at
-benchmark.pivotlake.io. The results live in S3, one JSON per system, machine and scale
-factor, which `website/pull-results.sh` syncs into `website/results/` and bakes
-into `website/data.js`; neither is in the repository. The Deploy Web workflow
-does that and publishes the site.
+benchmark.pivotlake.io. The results live in S3, one JSON per system, machine
+and scale factor under the bucket's `latest/`, which every benchmark machine
+adds its own result to; the site box syncs that every few minutes into the
+`data.js` the page loads. `website/pull-results.sh` does the same locally.
+The Deploy Web workflow publishes the page and sets the box's refresh up.
 
 `benchmarks/run-and-collect.sh` runs chosen benchmarks on chosen databases and
 writes their results into the website. The Benchmark workflow (Actions, "Run

@@ -11,10 +11,13 @@
 #   result.json            the result file (missing if the run produced none)
 #   <engine>.log           the harness log
 #   run.log, cloud-init-output.log
-#   meta.json              what ran, the exit status, and `path`: where
-#                          result.json goes under website/results/; written
-#                          last, so its presence means the upload is complete
-# The workflow's run job waits for the machine to terminate, then downloads that.
+#   meta.json              what ran, the exit status, and `path`: the result's
+#                          name under the bucket's latest/; written last, so
+#                          its presence means the upload is complete
+# A run that succeeded then copies its result to latest/<path>, which the
+# website is built from (the site box syncs latest/ every few minutes). The
+# workflow's run job only keeps the upload as an artifact, so a machine may
+# outlive it.
 
 shutdown -P "+$(( @timeout@ / 60 + 120 ))"
 trap 'shutdown now' EXIT
@@ -111,5 +114,10 @@ jq -n --arg branch '@branch@' --arg database '@database@' --arg machine '@machin
         scale_factor: (if $sf == "" then null else ($sf | tonumber) end), engine: $engine, disk: $disk,
         path: (if $path == "" then null else $path end), run_id: $run_id, run_url: $run_url, date: $date, status: $status}' |
     aws s3 cp - "$s3_dir/meta.json"
+
+if [ "$status" = 0 ] && [ -n "$path" ]; then
+    aws s3 cp "$out/result.json" "s3://@bucket@/latest/$path" && echo "published latest/$path" | tee -a "$log"
+    aws s3 cp "$log" "$s3_dir/run.log"
+fi
 
 shutdown now

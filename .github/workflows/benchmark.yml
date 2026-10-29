@@ -1,9 +1,9 @@
 # Benchmarks on AWS machines, from the branch the workflow is started from
 # ("Use workflow from"). One job per database, machine type, benchmark and
 # scale factor launches an EC2 machine (benchmarks/launch.sh), waits for it to
-# finish and terminate itself, downloads what it uploaded to S3, keeps that as
-# an artifact and, when the run succeeded, promotes its result file to the
-# bucket's latest/, which the website is built from (Deploy Web). See
+# finish and terminate itself, downloads what it uploaded to S3 and keeps that
+# as an artifact. The machine itself copies its result to the bucket's latest/,
+# which the website is built from, so a machine may outlive its job. See
 # README.md here for the setup.
 
 name: Benchmark
@@ -171,13 +171,7 @@ jobs:
           [ "$status" = 0 ] || { echo "::error::run-and-collect.sh exited $status on the machine; see run.log in the artifact."; exit 1; }
           [ -f "$dir/result.json" ] || { echo "::error::The run produced no result file; see run.log in the artifact."; exit 1; }
           completed='[.result[] | if type == "array" then any(.[]; . != null) else . != null end] | map(select(.)) | length'
-          echo "- $(jq "$completed" "$dir/result.json") of $(jq '.result | length' "$dir/result.json") queries completed" >> "$GITHUB_STEP_SUMMARY"
-          echo "path=$(jq -r .path "$dir/meta.json")" >> "$GITHUB_OUTPUT"
-
-      - name: Promote the result to latest/
-        run: |
-          aws s3 cp "out/$key/$machine/result.json" "s3://$bucket/latest/${{ steps.download.outputs.path }}"
-          echo "- now the latest result for this database, benchmark and machine" >> "$GITHUB_STEP_SUMMARY"
+          echo "- $(jq "$completed" "$dir/result.json") of $(jq '.result | length' "$dir/result.json") queries completed; $(grep -m1 '^published latest/' "$dir/run.log" || echo 'NOT published by the machine, see run.log')" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Keep the upload as an artifact
         if: always() && steps.launch.outcome == 'success'

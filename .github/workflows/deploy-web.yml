@@ -1,20 +1,20 @@
 name: Deploy Web
 
-# Publishes the website to benchmark.pivotlake.io: the current results are pulled from
-# the bucket's latest/ (website/pull-results.sh) and baked into data.js on a
-# GitHub-hosted runner, which is the one with AWS access; the site box's
-# runner then rsyncs the site into the docroot nginx serves, the way the pivot
-# and cloud repos publish pivotlake.io. Run by hand.
+# Publishes the website to benchmark.pivotlake.io, the way the pivot and cloud
+# repos publish pivotlake.io: index.html and queries.js (the query texts, baked
+# here) rsynced to the docroot nginx serves on the site box. The results are
+# not part of it: the box rebuilds data.js from the bucket's latest/ every few
+# minutes (website/refresh-results.sh, which this installs there along with
+# its cron line). Run by hand, when the page or the scripts change.
 #
 # Repository variables:
-#   AWS_ROLE_ARN, AWS_REGION, RESULTS_BUCKET
-#                        the bucket the results are in, as for Benchmark
 #   PIVOT_SITE_SSH_HOST  where to publish, e.g. deploy@pivotlake-prod
 #   GCP_PROJECT, GCP_RUNNER_X86, GCP_RUNNER_ZONE
 #                        the GCP project, VM name and zone of the runner box
 #   BENCH_SITE_DOCROOT   the directory nginx serves for benchmark.pivotlake.io,
 #                        e.g. /var/www/benchmark.pivotlake.io
 #   BENCH_SITE_BASE_URL  optional, defaults to https://benchmark.pivotlake.io
+#   RESULTS_BUCKET, AWS_REGION   the bucket the box reads results from
 # Repository secret (as in the pivot and cloud repos):
 #   GCP_SA_KEY           GCP key that brings the runner VM online
 
@@ -26,32 +26,6 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  build:
-    name: Build the site from S3
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write   # to assume the launcher role, which may read the bucket
-    steps:
-      - uses: actions/checkout@v4
-      - uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
-          aws-region: ${{ vars.AWS_REGION }}
-          role-session-name: pivot-benchmarks-deploy-${{ github.run_id }}
-      - name: Pull the results and bake data.js
-        run: |
-          website/pull-results.sh "${{ vars.RESULTS_BUCKET }}"
-          [ -s website/data.js ] || { echo "::error::No data.js was produced."; exit 1; }
-          echo "$(find website/results -name '*.json' | wc -l) results" >> "$GITHUB_STEP_SUMMARY"
-      - uses: actions/upload-artifact@v4
-        with:
-          name: site
-          path: |
-            website/
-            !website/*.sh
-          if-no-files-found: error
-
   # Resume the GCP VM so its runners come online before the deploy dispatches.
   start-ci:
     name: Start GCP runner
@@ -66,17 +40,16 @@ jobs:
 
   deploy:
     name: Deploy the site
-    needs: [build, start-ci]
+    needs: [start-ci]
     runs-on: gcp-builder
     env:
       SSH_HOST: ${{ vars.PIVOT_SITE_SSH_HOST }}
       DOCROOT: ${{ vars.BENCH_SITE_DOCROOT }}
       SITE_URL: ${{ vars.BENCH_SITE_BASE_URL || 'https://benchmark.pivotlake.io' }}
+      BUCKET: ${{ vars.RESULTS_BUCKET }}
+      REGION: ${{ vars.AWS_REGION }}
     steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: site
-          path: site/
+      - uses: actions/checkout@v4
 
       # Checked before anything is uploaded, including the runner's own SSH
       # identity, which is ambient rather than configured here.
@@ -86,6 +59,7 @@ jobs:
           missing=
           [ -n "$SSH_HOST" ] || missing="$missing\n  PIVOT_SITE_SSH_HOST (variable): user@host to publish to, e.g. deploy@pivotlake-prod"
           [ -n "$DOCROOT" ] || missing="$missing\n  BENCH_SITE_DOCROOT (variable): the directory nginx serves for benchmark.pivotlake.io, e.g. /var/www/benchmark.pivotlake.io"
+          [ -n "$BUCKET" ] || missing="$missing\n  RESULTS_BUCKET (variable): the bucket whose latest/ holds the results"
           if [ -n "$missing" ]; then
             printf "::error::Deploying the site is not configured yet. Set:%b\n" "$missing"
             exit 1
@@ -94,32 +68,53 @@ jobs:
             { echo "::error::rsync is not installed on this runner."; exit 1; }
           ssh -o BatchMode=yes "$SSH_HOST" true ||
             { echo "::error::This runner cannot open an SSH session to $SSH_HOST. Its ~/.ssh needs a key the site accepts and a known_hosts entry for it."; exit 1; }
-          [ -f site/index.html ] && [ -f site/data.js ] ||
-            { echo "::error::The site artifact is missing index.html or data.js."; exit 1; }
+          ssh -o BatchMode=yes "$SSH_HOST" 'command -v aws >/dev/null && command -v python3 >/dev/null && command -v crontab >/dev/null' ||
+            { echo "::error::$SSH_HOST needs the AWS CLI, python3 and cron for refresh-results.sh."; exit 1; }
 
-      # The artifact is the whole site and nothing else lives in the docroot,
-      # so `--delete` keeps the two identical.
-      - name: Publish the site
+      - name: Bake the query texts
         run: |
           set -euo pipefail
-          rsync --recursive --links --compress --delete --chmod=D755,F644 site/ "$SSH_HOST:$DOCROOT/"
+          website/generate-results.sh /nonexistent website
+          [ -s website/queries.js ] || { echo "::error::No queries.js was produced."; exit 1; }
+
+      # The page and the query texts: nothing else lives in the docroot but
+      # data.js, which the box maintains, so `--delete` keeps the rest identical.
+      - name: Publish the page
+        run: |
+          set -euo pipefail
+          rsync --recursive --links --compress --delete --chmod=D755,F644 \
+            --include=index.html --include=queries.js --exclude='*' website/ "$SSH_HOST:$DOCROOT/"
+
+      # The refresh: the scripts beside the docroot, a cron line, and one run
+      # now so data.js is there before anyone looks.
+      - name: Install the results refresh
+        run: |
+          set -euo pipefail
+          rsync --compress --chmod=F755 website/refresh-results.sh website/generate-results.sh "$SSH_HOST:benchmark-refresh/"
+          # The bucket, docroot and region expand here, on purpose.
+          # shellcheck disable=SC2029
+          ssh "$SSH_HOST" "( crontab -l 2>/dev/null | grep -v refresh-results.sh; echo '*/5 * * * * \$HOME/benchmark-refresh/refresh-results.sh $BUCKET $DOCROOT $REGION >> \$HOME/benchmark-refresh/refresh.log 2>&1' ) | crontab -"
+          # shellcheck disable=SC2029
+          ssh "$SSH_HOST" "rm -f benchmark-refresh/listing.txt && benchmark-refresh/refresh-results.sh $BUCKET $DOCROOT $REGION"
 
       # What the site actually serves, reached the way a person reaches it.
       - name: Verify what the site serves
         run: |
           set -euo pipefail
-          fail_hint="The upload succeeded, so the files are on the box. Check that $SITE_URL resolves to it, that 80/443 are open, and that nginx serves $DOCROOT for it."
+          fail_hint="The uploads succeeded, so the files are on the box. Check that $SITE_URL resolves to it, that 80/443 are open, and that nginx serves $DOCROOT for it."
           status=$(curl --silent --show-error --user-agent "Mozilla/5.0" \
             --output served-index.html --write-out '%{http_code}' "$SITE_URL/") || true
           [ "$status" = "200" ] ||
             { echo "::error::$SITE_URL/ answered $status. $fail_hint"; exit 1; }
-          cmp --silent site/index.html served-index.html ||
-            { echo "::error::$SITE_URL/ serves something other than the built index.html."; exit 1; }
+          cmp --silent website/index.html served-index.html ||
+            { echo "::error::$SITE_URL/ serves something other than this repo's website/index.html."; exit 1; }
+          curl --fail --silent --show-error --output served-queries.js "$SITE_URL/queries.js" ||
+            { echo "::error::$SITE_URL/queries.js is not served."; exit 1; }
+          cmp --silent website/queries.js served-queries.js ||
+            { echo "::error::$SITE_URL/queries.js is not the one just baked."; exit 1; }
           curl --fail --silent --show-error --output served-data.js "$SITE_URL/data.js" ||
-            { echo "::error::$SITE_URL/data.js is not served."; exit 1; }
-          cmp --silent site/data.js served-data.js ||
-            { echo "::error::$SITE_URL/data.js is not the data.js just built."; exit 1; }
-          echo "$SITE_URL serves the page and $(grep -c '"benchmark"' site/data.js) results."
+            { echo "::error::$SITE_URL/data.js is not served; the refresh on the box did not produce it."; exit 1; }
+          echo "$SITE_URL serves the page and $(grep -c '"benchmark"' served-data.js) results; the box refreshes them every five minutes."
 
   # NOTE: no stop job. The runner VM runs an hourly suspend-if-unused cron that
   # only takes the box down when no run is active.

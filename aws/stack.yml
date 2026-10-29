@@ -37,11 +37,31 @@ Resources:
     Type: AWS::S3::Bucket
     Properties:
       BucketName: !If [NamedBucket, !Ref BucketName, !Ref AWS::NoValue]
-      PublicAccessBlockConfiguration:
+      PublicAccessBlockConfiguration:   # latest/ is public by the bucket policy below; nothing else
         BlockPublicAcls: true
-        BlockPublicPolicy: true
+        BlockPublicPolicy: false
         IgnorePublicAcls: true
-        RestrictPublicBuckets: true
+        RestrictPublicBuckets: false
+
+  # The site box builds the website's data from latest/ without credentials:
+  # the results are public, the runs' logs and the datasets are not.
+  ResultsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref ResultsBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: '*'
+            Action: s3:GetObject
+            Resource: !Sub '${ResultsBucket.Arn}/latest/*'
+          - Effect: Allow
+            Principal: '*'
+            Action: s3:ListBucket
+            Resource: !GetAtt ResultsBucket.Arn
+            Condition:
+              StringLike: { 's3:prefix': 'latest/*' }
 
   # What a benchmark machine may do: upload its results.
   MachineRole:

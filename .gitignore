@@ -34,3 +34,4 @@ __pycache__/
 # The website's results come from S3 (website/pull-results.sh)
 /website/results/
 /website/data.js
+/website/queries.js
