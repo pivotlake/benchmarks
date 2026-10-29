@@ -170,10 +170,19 @@ jobs:
           status=$(jq -r .status "$dir/meta.json")
           [ "$status" = 0 ] || { echo "::error::run-and-collect.sh exited $status on the machine; see run.log in the artifact."; exit 1; }
           [ -f "$dir/result.json" ] || { echo "::error::The run produced no result file; see run.log in the artifact."; exit 1; }
-          # A result in which every query failed never replaces the one the website shows.
-          jq -e '[.result[] | if type == "array" then any(.[]; . != null) else . != null end] | any' "$dir/result.json" >/dev/null ||
-            { echo "::error::Every query failed in this result; it stays in the run's folder and is not promoted to latest/. See the engine's log in the artifact."; exit 1; }
-          echo "path=$(jq -r .path "$dir/meta.json")" >> "$GITHUB_OUTPUT"
+          # A result never replaces one in latest/ that completed more queries: a
+          # broken run (an engine whose every try but the first failed, say) stays
+          # in its folder for inspection and the website keeps the better result.
+          path=$(jq -r .path "$dir/meta.json")
+          completed='[.result[] | if type == "array" then any(.[]; . != null) else . != null end] | map(select(.)) | length'
+          new=$(jq "$completed" "$dir/result.json")
+          if aws s3 cp "s3://$bucket/latest/$path" "$dir/previous.json" >/dev/null 2>&1; then
+            old=$(jq "$completed" "$dir/previous.json")
+            [ "$new" -ge "$old" ] ||
+              { echo "::error::This result completed $new queries where the one in latest/ completed $old; not promoted. See the engine's log in the artifact."; exit 1; }
+          fi
+          echo "- $new of $(jq '.result | length' "$dir/result.json") queries completed" >> "$GITHUB_STEP_SUMMARY"
+          echo "path=$path" >> "$GITHUB_OUTPUT"
 
       # Only a validated result replaces the one the website shows.
       - name: Promote the result to latest/
