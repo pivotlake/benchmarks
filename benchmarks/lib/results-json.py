@@ -27,19 +27,19 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 # Engine directory -> display name and tags, for the website's selectors.
 ENGINES = {
     "pivot": ("pivot (Parquet)", ["Rust", "column-oriented", "Parquet", "stateless"]),
-    "pivot-parquet-partitioned": ("pivot (Parquet, partitioned)", ["Rust", "column-oriented", "Parquet", "stateless"]),
+    "pivot-parquet-partitioned": ("pivot (Parquet)", ["Rust", "column-oriented", "Parquet", "stateless"]),
     "duckdb": ("DuckDB", ["C++", "column-oriented", "embedded"]),
     "duckdb-parquet": ("DuckDB (Parquet)", ["C++", "column-oriented", "embedded", "Parquet", "stateless"]),
-    "duckdb-parquet-partitioned": ("DuckDB (Parquet, partitioned)", ["C++", "column-oriented", "embedded", "Parquet", "stateless"]),
+    "duckdb-parquet-partitioned": ("DuckDB (Parquet)", ["C++", "column-oriented", "embedded", "Parquet", "stateless"]),
     "clickhouse": ("ClickHouse", ["C++", "column-oriented"]),
     "clickhouse-parquet": ("ClickHouse (Parquet)", ["C++", "column-oriented", "Parquet", "stateless"]),
-    "clickhouse-parquet-partitioned": ("ClickHouse (Parquet, partitioned)", ["C++", "column-oriented", "Parquet", "stateless"]),
+    "clickhouse-parquet-partitioned": ("ClickHouse (Parquet)", ["C++", "column-oriented", "Parquet", "stateless"]),
     "datafusion": ("DataFusion", ["Rust", "column-oriented", "embedded", "Parquet", "stateless"]),
-    "datafusion-partitioned": ("DataFusion (Parquet, partitioned)", ["Rust", "column-oriented", "embedded", "Parquet", "stateless"]),
+    "datafusion-partitioned": ("DataFusion (Parquet)", ["Rust", "column-oriented", "embedded", "Parquet", "stateless"]),
     "spark": ("Apache Spark", ["Java", "column-oriented", "Parquet", "stateless"]),
     "starrocks": ("StarRocks", ["C++", "column-oriented"]),
 }
-CLICKBENCH_NAMES = {"spark": "Apache Spark (Parquet, single)"}
+CLICKBENCH_NAMES = {"spark": "Apache Spark (Parquet)"}
 CLICKBENCH_QUERIES = 43
 
 
