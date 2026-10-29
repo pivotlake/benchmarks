@@ -8,7 +8,7 @@ Both are run by hand from the Actions tab.
 
 "Run workflow", pick the branch under "Use workflow from", edit the inputs
 (they default to every database, every benchmark, SF100 and SF1000, on
-c6id.4xlarge), run. Then:
+c8gd.4xlarge), run. Then:
 
 1. **plan**: one job per database, machine type, benchmark and scale factor
    (ClickBench has none); a database without an entry in a benchmark, such as
@@ -101,7 +101,7 @@ volume when there are several, and runs everything on them: the datasets, each
 engine's storage, its spill files. The root volume then only holds the OS. A
 type without local NVMe (c6a, m6a, ...) runs everything on the root volume,
 sized by the `disk` input. Which it was is in `meta.json` and `run.log`.
-c6id.4xlarge, the default, is c6a.4xlarge with one 950 GB NVMe; SF1000 needs
+c8gd.4xlarge, the default, is a 16-core Graviton 4 with one 950 GB NVMe; SF1000 needs
 a storage type such as i4i.8xlarge (2 × 3.75 TB).
 
 Quotas and cost: every database runs on its own on-demand machine, so a

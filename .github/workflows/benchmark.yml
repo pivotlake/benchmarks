@@ -26,9 +26,9 @@ on:
         type: string
         default: '100 1000'
       machines:
-        description: 'EC2 instance types, space-separated; everything runs on each. Types with local NVMe (c6id, i4i, ...) benchmark on it'
+        description: 'EC2 instance types, space-separated; everything runs on each. Types with local NVMe (c8gd, c8id, i4i, ...) benchmark on it'
         type: string
-        default: 'c6id.4xlarge'
+        default: 'c8gd.4xlarge'
       disk:
         description: 'Root volume per machine, GB; only matters on machines without local NVMe (SF1000 with the engines that load their own copy needs a few TB)'
         type: string
