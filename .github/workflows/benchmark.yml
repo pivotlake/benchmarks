@@ -170,6 +170,9 @@ jobs:
           status=$(jq -r .status "$dir/meta.json")
           [ "$status" = 0 ] || { echo "::error::run-and-collect.sh exited $status on the machine; see run.log in the artifact."; exit 1; }
           [ -f "$dir/result.json" ] || { echo "::error::The run produced no result file; see run.log in the artifact."; exit 1; }
+          # A result in which every query failed never replaces the one the website shows.
+          jq -e '[.result[] | if type == "array" then any(.[]; . != null) else . != null end] | any' "$dir/result.json" >/dev/null ||
+            { echo "::error::Every query failed in this result; it stays in the run's folder and is not promoted to latest/. See the engine's log in the artifact."; exit 1; }
           echo "path=$(jq -r .path "$dir/meta.json")" >> "$GITHUB_OUTPUT"
 
       # Only a validated result replaces the one the website shows.
