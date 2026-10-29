@@ -65,7 +65,7 @@ One session means one process for the embedded engines (a single `duckdb`,
 `datafusion-cli` or `clickhouse-local` runs all 22 queries, so later queries
 find what earlier ones left in its memory) and one connection for the servers
 (pivot, ClickHouse, StarRocks). A query that fails ends the run without a score, and the
-whole run may take `BENCH_TIMEOUT` seconds (default 3600).
+whole run may take `BENCH_TIMEOUT` seconds, when it is set (no limit by default).
 
 Each engine directory has ClickBench's small scripts (`install`, `start`,
 `stop`, `check`, `load`, `data-size`) plus `power`, which runs the query files

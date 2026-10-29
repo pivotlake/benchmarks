@@ -18,7 +18,7 @@
 #   DATASETS_URL   fetch datasets from <url>/<suite>/sf<N> instead of generating,
 #                  when there is one (see lib/dataset.sh)
 #   PIVOT_BINARY   run a pivot you built instead of the latest release
-#   BENCH_TIMEOUT  seconds the whole power run may take (default 3600)
+#   BENCH_TIMEOUT  seconds the whole power run may take (default: no limit)
 
 set -e
 

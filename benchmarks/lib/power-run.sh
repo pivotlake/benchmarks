@@ -18,7 +18,8 @@
 # started again, then the power run is timed from the moment ./power starts to
 # the moment it ends. That wall time is the score. It prints
 # "Power run: <seconds>", then "qNN <seconds>" for each query; a run where a
-# query failed or that passed $BENCH_TIMEOUT seconds prints "Power run: null".
+# query failed (or that passed $BENCH_TIMEOUT seconds, when set) prints
+# "Power run: null".
 #
 # The queries are the suite's queries/*.sql, in name order; "{fraction}" in a
 # query becomes 0.0001 / SF (TPC-H q11's HAVING fraction).
@@ -27,13 +28,13 @@
 #   BENCH_DATA         dataset directory, one subdirectory of parquet per table
 #   BENCH_SF           its scale factor
 #   BENCH_RESTARTABLE  "yes" (default) when the engine runs a server
-#   BENCH_TIMEOUT      seconds the whole power run may take (default 3600)
+#   BENCH_TIMEOUT      seconds the whole power run may take (default: no limit)
 
 set -e
 
 : "${BENCH_DATA:?}" "${BENCH_SF:?}"
 : "${BENCH_RESTARTABLE:=yes}"
-: "${BENCH_TIMEOUT:=3600}"
+: "${BENCH_TIMEOUT:=0}"
 
 # A dataset at a large scale factor is thousands of parquet files, and an engine
 # that reads them in place opens many at once: lift the open-file limit as far
@@ -99,7 +100,11 @@ fi
 echo "power run: ${#names[@]} queries in one session"
 times="$TMPDIR/times"
 start_time=$(date +%s.%N)
-timeout "$BENCH_TIMEOUT" ./power "$queries_dir"/q*.sql > "$times" && status=0 || status=$?
+if [ "$BENCH_TIMEOUT" -gt 0 ]; then
+    timeout "$BENCH_TIMEOUT" ./power "$queries_dir"/q*.sql > "$times" && status=0 || status=$?
+else
+    ./power "$queries_dir"/q*.sql > "$times" && status=0 || status=$?
+fi
 end_time=$(date +%s.%N)
 
 if [ "$status" -eq 0 ] && [ "$(wc -l < "$times")" -eq "${#names[@]}" ]; then
