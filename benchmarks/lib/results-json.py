@@ -26,7 +26,7 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 
 # Engine directory -> display name and tags, for the website's selectors.
 ENGINES = {
-    "pivot": ("pivot", ["Rust", "column-oriented", "Parquet", "stateless"]),
+    "pivot": ("pivot (Parquet)", ["Rust", "column-oriented", "Parquet", "stateless"]),
     "pivot-parquet-partitioned": ("pivot (Parquet, partitioned)", ["Rust", "column-oriented", "Parquet", "stateless"]),
     "duckdb": ("DuckDB", ["C++", "column-oriented", "embedded"]),
     "duckdb-parquet": ("DuckDB (Parquet)", ["C++", "column-oriented", "embedded", "Parquet", "stateless"]),
