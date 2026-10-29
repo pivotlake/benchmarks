@@ -46,7 +46,7 @@ build)
     aws s3 sync --only-show-errors --delete --exclude manifest.json "$out/" "$url/"
     pivot_version=$("${PIVOT_BINARY:-$HOME/.pivot/cli/latest/pivot}" --version 2>/dev/null | head -n1 || echo unknown)
     jq -n --arg suite "$(basename "$PWD")" --argjson sf "$sf" --arg pivot "$pivot_version" \
-          --arg generator "$(grep -oE '(tpchgen|ssb-dbgen)[^"]*' data/generate.sh | head -n1)" \
+          --arg generator "$(grep -oE '(tpchgen|ssb-dbgen)[ -][0-9][0-9a-f.]*' data/generate.sh | head -n1 || echo unknown)" \
           --argjson bytes "$(du -sb "$out" | cut -f1)" --argjson files "$(find "$out" -name '*.parquet' | wc -l)" \
           --arg date "$(date -u +%F)" --arg machine "$(curl -s -m 2 -H "X-aws-ec2-metadata-token: $(curl -s -m 2 -X PUT http://169.254.169.254/latest/api/token -H 'X-aws-ec2-metadata-token-ttl-seconds: 60')" http://169.254.169.254/latest/meta-data/instance-type || hostname)" \
           --argjson build_seconds "$(( built - start ))" \
