@@ -28,6 +28,8 @@
 #   BENCH_S3           the same dataset in a bucket, <DATASETS_URL>/<suite>/sf<N>,
 #                      which the <engine>-s3 engines read instead (with
 #                      AWS_REGION and the AWS CLI's credentials in the environment)
+#   BENCH_S3_ANONYMOUS "yes" when there are no credentials: the bucket is
+#                      public and the engines read it unsigned
 #   BENCH_SF           its scale factor
 #   BENCH_RESTARTABLE  "yes" (default) when the engine runs a server
 #   BENCH_TIMEOUT      seconds the whole power run may take (default 3600)

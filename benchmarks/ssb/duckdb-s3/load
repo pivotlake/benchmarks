@@ -3,11 +3,14 @@ set -e
 
 # No ingestion: ssb.db holds one view per table over its parquet files in the
 # bucket. A view binds to its files when it is created, so the session carries
-# a secret for the keys in the environment (./power makes its own again).
+# a secret for the bucket (./power makes its own again): the credentials in
+# the environment, or none when there are none and the bucket is public, read
+# unsigned.
+if [ -n "${BENCH_S3_ANONYMOUS:-}" ]; then provider=""; else provider="PROVIDER credential_chain, "; fi
 rm -f ssb.db
 {
-    echo "CREATE SECRET (TYPE s3, PROVIDER credential_chain, REGION '$AWS_REGION');"
-    for table in $(aws s3 ls "$BENCH_S3/" | awk '/ PRE / { print substr($2, 1, length($2) - 1) }'); do
+    echo "CREATE SECRET (TYPE s3, ${provider}REGION '$AWS_REGION');"
+    for table in $(aws s3 ls ${BENCH_S3_ANONYMOUS:+--no-sign-request} "$BENCH_S3/" | awk '/ PRE / { print substr($2, 1, length($2) - 1) }'); do
         echo "CREATE VIEW $table AS FROM read_parquet('$BENCH_S3/$table/*.parquet');"
     done
 } | duckdb ssb.db >/dev/null

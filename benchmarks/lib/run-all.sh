@@ -45,15 +45,18 @@ usage() {
     exit 1
 }
 
-# The credentials the AWS CLI resolves, as export lines.
+# The credentials the AWS CLI resolves, as export lines (nothing when it
+# resolves none).
 aws_credentials() {
     aws configure export-credentials --format env 2>/dev/null && return   # AWS CLI v2
-    python3 - <<'PY'   # v1: its botocore resolves the same chain
+    python3 - 2>/dev/null <<'PY'   # v1: its botocore resolves the same chain
 import botocore.session
-c = botocore.session.get_session().get_credentials().get_frozen_credentials()
-print(f"export AWS_ACCESS_KEY_ID={c.access_key} AWS_SECRET_ACCESS_KEY={c.secret_key}")
-if c.token:
-    print(f"export AWS_SESSION_TOKEN={c.token}")
+creds = botocore.session.get_session().get_credentials()
+if creds:
+    c = creds.get_frozen_credentials()
+    print(f"export AWS_ACCESS_KEY_ID={c.access_key} AWS_SECRET_ACCESS_KEY={c.secret_key}")
+    if c.token:
+        print(f"export AWS_SESSION_TOKEN={c.token}")
 PY
 }
 
@@ -75,21 +78,25 @@ results="$PWD/results/sf$sf"
 # The -s3 engines read the dataset lib/dataset.sh built at
 # $DATASETS_URL/<suite>/sf<N> (its manifest says it is all there), in the
 # bucket's region, with the credentials the AWS CLI resolves, exported for the
-# engines that take them from the environment. A scale factor the bucket lacks
-# is dataset.sh's job, not the run's.
+# engines that take them from the environment. With none anywhere the bucket
+# must be public, and the CLI and the engines read it unsigned
+# (BENCH_S3_ANONYMOUS; pivot-s3 cannot, it writes its datastore there). A
+# scale factor the bucket lacks is dataset.sh's job, not the run's.
 if [ ${#s3_engines[@]} -gt 0 ]; then
     [ -n "${DATASETS_URL:-}" ] ||
         { echo "${s3_engines[*]}: set DATASETS_URL to the bucket holding the datasets (s3://pivotbench/datasets)" >&2; exit 1; }
     s3_dataset="${DATASETS_URL%/}/$suite/sf$sf"
     command -v aws >/dev/null ||
         { echo "${s3_engines[*]}: reading $s3_dataset needs the AWS CLI (aws)" >&2; exit 1; }
-    aws s3 cp "$s3_dataset/manifest.json" - >/dev/null 2>&1 ||
-        { echo "no dataset at $s3_dataset: build it with $lib/dataset.sh build $PWD $sf $s3_dataset" >&2; exit 1; }
     [ -n "${AWS_ACCESS_KEY_ID:-}" ] || eval "$(aws_credentials)"
+    sign=()
+    [ -n "${AWS_ACCESS_KEY_ID:-}" ] || { export BENCH_S3_ANONYMOUS=yes; sign=(--no-sign-request); }
+    aws s3 cp "${sign[@]}" "$s3_dataset/manifest.json" - >/dev/null 2>&1 ||
+        { echo "no dataset at $s3_dataset${BENCH_S3_ANONYMOUS:+ (or none readable without credentials)}: build it with $lib/dataset.sh build $PWD $sf $s3_dataset" >&2; exit 1; }
     bucket="${s3_dataset#s3://}"
     bucket="${bucket%%/*}"
     # HeadBucket names the region and needs only ListBucket.
-    AWS_REGION=$(aws s3api head-bucket --bucket "$bucket" --query BucketRegion --output text 2>/dev/null) || AWS_REGION=""
+    AWS_REGION=$(aws s3api head-bucket "${sign[@]}" --bucket "$bucket" --query BucketRegion --output text 2>/dev/null) || AWS_REGION=""
     [ -n "$AWS_REGION" ] && [ "$AWS_REGION" != None ] ||
         AWS_REGION=$(curl -sI "https://$bucket.s3.amazonaws.com/" | tr -d '\r' | awk 'tolower($1) == "x-amz-bucket-region:" { print $2 }')
     export AWS_REGION="${AWS_REGION:-us-east-1}" BENCH_S3="$s3_dataset"

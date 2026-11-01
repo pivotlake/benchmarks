@@ -2,8 +2,9 @@
 """Runs the query files given as arguments, in order, in ONE local PySpark
 session over one view per table directory in $BENCH_S3 (the tables tables.txt
 names), configured the way ClickBench's spark entry configures it, plus
-Hadoop's S3A connector reading the bucket with the keys and region in the
-environment. Stdout: each query's runtime in seconds, one per line. Exits
+Hadoop's S3A connector reading the bucket with the credentials and region in
+the environment, or unsigned when there are none ($BENCH_S3_ANONYMOUS) and the
+bucket is public. Stdout: each query's runtime in seconds, one per line. Exits
 non-zero at the first failing query.
 
 Each runtime covers the query and collecting its whole result: ClickBench's
@@ -34,7 +35,7 @@ hadoop = next(jars.glob("hadoop-client-api-*.jar")).stem.rsplit("-", 1)[1]
 # mode, as ClickBench configures it; spills go to $TMPDIR (the engine's
 # directory, on the disk being measured) rather than /tmp.
 memory_mb = int(psutil.virtual_memory().available / 2**20 * 0.7)
-spark = (
+builder = (
     SparkSession.builder
     .appName("pivot-benchmarks")
     .master("local[*]")
@@ -45,8 +46,11 @@ spark = (
     .config("spark.hadoop.fs.s3a.endpoint.region", os.environ["AWS_REGION"])
     # The progress bar redraws itself on stderr with carriage returns.
     .config("spark.ui.showConsoleProgress", "false")
-    .getOrCreate()
 )
+if os.environ.get("BENCH_S3_ANONYMOUS"):
+    builder = builder.config("spark.hadoop.fs.s3a.aws.credentials.provider",
+                             "org.apache.hadoop.fs.s3a.AnonymousAWSCredentialsProvider")
+spark = builder.getOrCreate()
 spark.sparkContext.setLogLevel("ERROR")
 
 dataset = "s3a://" + os.environ["BENCH_S3"].removeprefix("s3://")

@@ -1,6 +1,16 @@
 #!/bin/bash
 set -eu
 
+# pivot keeps its datastore in the bucket beside the dataset, so it writes
+# there: reading a public bucket unsigned, as the other -s3 engines can, is
+# not enough. It reaches the bucket through a secret in its config file
+# (./start writes it) that takes a user's access key, not a session token.
+# Checked here because the driver shows install's output and not start's.
+[ -n "${AWS_ACCESS_KEY_ID:-}" ] && [ -n "${AWS_SECRET_ACCESS_KEY:-}" ] ||
+    { echo "pivot-s3 needs AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY: pivot keeps its datastore in the bucket (${BENCH_S3:-}-pivot/), which it cannot write unsigned" >&2; exit 1; }
+[ -z "${AWS_SESSION_TOKEN:-}" ] ||
+    { echo "pivot's S3 secret takes an access key, not a session token (AWS_SESSION_TOKEN)" >&2; exit 1; }
+
 if ! command -v psql >/dev/null; then
     sudo apt-get update -y
     sudo apt-get install -y postgresql-client

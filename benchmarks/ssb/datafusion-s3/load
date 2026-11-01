@@ -2,8 +2,14 @@
 set -e
 
 # No ingestion: tables.sql defines one external table per directory in the
-# bucket, read in place with the keys and region in the environment. ./power
-# runs it ahead of every query.
-for table in $(aws s3 ls "$BENCH_S3/" | awk '/ PRE / { print substr($2, 1, length($2) - 1) }'); do
-    echo "CREATE EXTERNAL TABLE $table STORED AS PARQUET LOCATION '$BENCH_S3/$table/';"
+# bucket, read in place with the credentials and region in the environment.
+# ./power runs it ahead of every query. With no credentials the bucket is
+# public and the requests go unsigned; datafusion-cli still insists on
+# resolving credentials unless the table names some, so it gets placeholders
+# that skip_signature keeps it from using.
+options=""
+[ -z "${BENCH_S3_ANONYMOUS:-}" ] ||
+    options=" OPTIONS ('aws.access_key_id' 'anonymous', 'aws.secret_access_key' 'anonymous', 'aws.skip_signature' 'true', 'aws.region' '$AWS_REGION')"
+for table in $(aws s3 ls ${BENCH_S3_ANONYMOUS:+--no-sign-request} "$BENCH_S3/" | awk '/ PRE / { print substr($2, 1, length($2) - 1) }'); do
+    echo "CREATE EXTERNAL TABLE $table STORED AS PARQUET LOCATION '$BENCH_S3/$table/'$options;"
 done > tables.sql

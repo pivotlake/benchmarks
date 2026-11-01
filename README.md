@@ -51,7 +51,8 @@ benchmarks/clickbench/run-all.sh                # the default ClickBench systems
 The engines that read the parquet files in place (pivot, DuckDB, ClickHouse,
 DataFusion and Spark) also come as `<engine>-s3`, reading the same files from
 the bucket `DATASETS_URL` names, where `benchmarks/lib/dataset.sh` keeps the
-datasets (`s3://pivotbench/datasets` holds the usual scale factors);
+datasets (`s3://pivotbench/datasets` holds the usual scale factors and is
+public, so a box without AWS credentials reads it too; pivot alone needs keys);
 `benchmarks/tpch/README.md` has the details.
 
 `benchmarks/tpch/` and `benchmarks/ssb/` each hold their queries, a data

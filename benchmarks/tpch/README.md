@@ -80,10 +80,13 @@ and pivot through a datastore in the bucket beside the dataset
 adopt the dataset's files in place, as `pivot` adopts them on disk. The
 engines take the credentials the AWS CLI resolves, which `run-all.sh` exports
 into the environment when it carries none, and the bucket's region from
-`AWS_REGION`, which `run-all.sh` looks up. pivot's server reads the keys from
-a secret in its config file, which takes a user's access key rather than an
-STS session token: `pivot-s3` needs a user's keys where the other four also
-run on an instance role.
+`AWS_REGION`, which `run-all.sh` looks up. `s3://pivotbench` is public: a box
+with no AWS credentials at all reads it unsigned (`BENCH_S3_ANONYMOUS`), so
+the four engines need no AWS setup beyond the CLI. `pivot-s3` is the
+exception: pivot keeps its datastore in the bucket, which it must write, and
+its server reads the keys from a secret in its config file, which takes a
+user's access key rather than an STS session token, so `pivot-s3` needs a
+user's keys even where the other four run unsigned or on an instance role.
 
 The power run is the same: the engine is restarted and the page cache
 dropped, then the queries run back to back in one session, so every byte

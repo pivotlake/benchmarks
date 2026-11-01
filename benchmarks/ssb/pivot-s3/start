@@ -8,11 +8,9 @@ set -eu
 ./check 2>/dev/null && exit 0
 
 # The datastore (its catalog and the tables' Delta logs) lives in the bucket
-# beside the dataset, and reads it with the keys in the environment through a
-# secret in the config file. The secret carries no session token, so the keys
-# must be a user's, and the file is kept private.
-[ -z "${AWS_SESSION_TOKEN:-}" ] ||
-    { echo "start: pivot's S3 secret takes an access key, not a session token (AWS_SESSION_TOKEN)" >&2; exit 1; }
+# beside the dataset, and pivot reaches it with the keys in the environment
+# through a secret in the config file (./install checks they are a user's
+# keys: the secret carries no session token). The file is kept private.
 bucket="${BENCH_S3#s3://}"
 umask 077
 cat > config.yaml <<CONFIG

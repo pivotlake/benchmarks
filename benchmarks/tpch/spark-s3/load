@@ -4,5 +4,5 @@ set -e
 # No ingestion: ./power reads each table's directory in the bucket in place.
 # tables.txt names the tables, and a session with no queries fetches the Hadoop
 # S3A connector power.py adds, so that download stays out of the power run.
-aws s3 ls "$BENCH_S3/" | awk '/ PRE / { print substr($2, 1, length($2) - 1) }' > tables.txt
+aws s3 ls ${BENCH_S3_ANONYMOUS:+--no-sign-request} "$BENCH_S3/" | awk '/ PRE / { print substr($2, 1, length($2) - 1) }' > tables.txt
 myenv/bin/python power.py
