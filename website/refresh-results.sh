@@ -16,10 +16,11 @@ listing=$(aws s3api list-objects-v2 --no-sign-request --region "$region" --bucke
     --query 'Contents[?ends_with(Key, `.json`)].[Key, ETag]' --output text | sort)
 [ "$listing" != "$(cat listing.txt 2>/dev/null)" ] || exit 0
 
+start=$(date +%s)
 aws s3 sync --no-sign-request --region "$region" --only-show-errors --delete \
     --exclude '*' --include '*.json' "s3://$bucket/latest/" results/
 ./generate-results.sh results . >/dev/null
 # Into place in one step, so a visitor never gets a half-written file.
 cp data.js "$docroot/data.js.tmp" && mv "$docroot/data.js.tmp" "$docroot/data.js"
 echo "$listing" > listing.txt
-echo "$(date -u '+%F %T') data.js rebuilt: $(grep -c '"benchmark"' data.js) results"
+echo "$(date -u '+%F %T') data.js rebuilt: $(grep -c '"benchmark"' data.js) results, in $(( $(date +%s) - start ))s"
