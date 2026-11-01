@@ -74,7 +74,7 @@ jobs:
       - name: Bake the query texts
         run: |
           set -euo pipefail
-          website/generate-results.sh /nonexistent website
+          website/generate-results.sh /nonexistent .
           [ -s website/queries.js ] || { echo "::error::No queries.js was produced."; exit 1; }
 
       # The page and the query texts: nothing else lives in the docroot but
