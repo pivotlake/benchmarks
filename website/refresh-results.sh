@@ -9,6 +9,7 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 bucket="$1" docroot="$2" region="${3:-eu-central-1}"
+export PATH="/usr/local/bin:$PATH"   # cron's PATH lacks it, and that is where the AWS CLI installs
 
 # Every result file and its ETag: changed, added or removed since last time?
 listing=$(aws s3api list-objects-v2 --no-sign-request --region "$region" --bucket "$bucket" --prefix latest/ \
