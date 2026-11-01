@@ -1,0 +1,5 @@
+#!/bin/bash
+set -eu
+
+# No ingestion: the size is the parquet files in the bucket.
+aws s3 ls --recursive --summarize "$BENCH_S3/" | awk '/Total Size/ { print $3 }'

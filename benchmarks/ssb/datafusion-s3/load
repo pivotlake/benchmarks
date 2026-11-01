@@ -1,0 +1,9 @@
+#!/bin/bash
+set -e
+
+# No ingestion: tables.sql defines one external table per directory in the
+# bucket, read in place with the keys and region in the environment. ./power
+# runs it ahead of every query.
+for table in $(aws s3 ls "$BENCH_S3/" | awk '/ PRE / { print substr($2, 1, length($2) - 1) }'); do
+    echo "CREATE EXTERNAL TABLE $table STORED AS PARQUET LOCATION '$BENCH_S3/$table/';"
+done > tables.sql

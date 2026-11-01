@@ -1,0 +1,12 @@
+#!/bin/bash
+# Runs the query files given as arguments, in order, over ONE psql connection.
+# Stdout: each query's runtime in seconds (psql's \timing), one per line.
+# ON_ERROR_STOP stops at the first failing query and exits non-zero.
+set -e
+: "${PIVOT_PORT:=5432}"
+
+out=$({ echo '\timing on'; cat "$@"; } |
+    psql -h 127.0.0.1 -p "$PIVOT_PORT" -U pivot -d postgres -X -q -A -t -v ON_ERROR_STOP=1 -f - 2>&1) ||
+    { printf '%s\n' "$out" | tail -n5 >&2; exit 1; }
+
+printf '%s\n' "$out" | awk '/^Time: / { printf "%.3f\n", $2 / 1000 }'

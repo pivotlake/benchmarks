@@ -10,7 +10,7 @@
 # collecting what the others produced.
 #
 # Usage: ./run-and-collect.sh [options]
-#   --databases "pivot duckdb ..."   default: every database below
+#   --databases "pivot duckdb ..."   default: every database below but the -s3 ones
 #   --benchmarks "tpch ssb clickbench"   default: all three
 #   --sf "100 1000"                  TPC-H and SSB scale factors, each run in
 #                                    turn (default 100)
@@ -29,13 +29,17 @@
 #   datafusion           tpch/ssb: datafusion         clickbench: datafusion-partitioned
 #   spark                tpch/ssb: spark              clickbench: spark
 #   starrocks            tpch: starrocks              (no SSB or ClickBench entry)
-# DATA_DIR, PIVOT_BINARY and BENCH_TIMEOUT pass through to the runs.
+#   pivot-s3, duckdb-s3, clickhouse-s3, datafusion-s3, spark-s3
+#                        tpch/ssb: that engine over the dataset in S3 (needs
+#                        DATASETS_URL; no ClickBench entry; not run by default)
+# DATA_DIR, DATASETS_URL, PIVOT_BINARY and BENCH_TIMEOUT pass through to the runs.
 
 set -u
 cd "$(dirname "$0")"
 
-all_databases="pivot duckdb duckdb-parquet clickhouse clickhouse-parquet datafusion spark starrocks"
-databases="$all_databases"
+default_databases="pivot duckdb duckdb-parquet clickhouse clickhouse-parquet datafusion spark starrocks"
+all_databases="$default_databases pivot-s3 duckdb-s3 clickhouse-s3 datafusion-s3 spark-s3"
+databases="$default_databases"
 benchmarks="tpch ssb clickbench"
 sfs=100
 machine=""
@@ -50,6 +54,7 @@ engine_for() {
         clickbench/clickhouse-parquet) echo clickhouse-parquet-partitioned ;;
         clickbench/datafusion)         echo datafusion-partitioned ;;
         clickbench/starrocks)          ;;
+        clickbench/*-s3)               ;;
         ssb/starrocks)                 ;;
         */*)                           echo "$database" ;;
     esac

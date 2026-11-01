@@ -1,0 +1,13 @@
+#!/bin/bash
+set -e
+
+# No ingestion: tpch.db holds one view per table over its parquet files in the
+# bucket. A view binds to its files when it is created, so the session carries
+# a secret for the keys in the environment (./power makes its own again).
+rm -f tpch.db
+{
+    echo "CREATE SECRET (TYPE s3, PROVIDER credential_chain, REGION '$AWS_REGION');"
+    for table in $(aws s3 ls "$BENCH_S3/" | awk '/ PRE / { print substr($2, 1, length($2) - 1) }'); do
+        echo "CREATE VIEW $table AS FROM read_parquet('$BENCH_S3/$table/*.parquet');"
+    done
+} | duckdb tpch.db >/dev/null

@@ -1,8 +1,9 @@
 # Star Schema Benchmark
 
-The 13 SSB queries on the same seven engines as `../tpch`, all reading the same
-rows: `lineorder` joined to its four dimensions (`customer`, `supplier`,
-`part`, `date`), in four flights of increasing dimensionality.
+The 13 SSB queries on the same engines as `../tpch` (its seven local ones and
+the five that read the same files from S3), all reading the same rows:
+`lineorder` joined to its four dimensions (`customer`, `supplier`, `part`,
+`date`), in four flights of increasing dimensionality.
 
 | engine | reads |
 |---|---|
@@ -13,17 +14,22 @@ rows: `lineorder` joined to its four dimensions (`customer`, `supplier`,
 | `clickhouse-parquet` | the parquet files in place (`clickhouse-local`) |
 | `datafusion` | the parquet files in place (`datafusion-cli`) |
 | `spark` | the parquet files in place (PySpark, one local session for the whole power run) |
+| `pivot-s3`, `duckdb-s3`, `clickhouse-s3`, `datafusion-s3`, `spark-s3` | the same parquet files in an S3 bucket, each the way its local counterpart reads them in place |
 
 ```sh
-./run-all.sh 100                                   # all engines at SF100
+./run-all.sh 100                                   # all local engines at SF100
 ./run-all.sh 1000 pivot duckdb clickhouse          # some engines at SF1000
 PIVOT_BINARY=~/pivot/target/release/pivot ./run-all.sh 100 pivot
+DATASETS_URL=s3://pivotbench/datasets ./run-all.sh 100 pivot-s3 duckdb-s3   # over the files in S3
 ```
 
 It runs exactly like `../tpch` (see its README): a power run, the 13 queries
 back to back in one session from a cold start, timed end to end, with the same
 engine scripts, driver and comparison, and this suite's schema, queries and
-generator.
+generator. The `-s3` engines read `DATASETS_URL/ssb/sf<N>`, the dataset
+`../lib/dataset.sh` built there (`s3://pivotbench/datasets` holds SF1, SF100
+and SF1000), the way the TPC-H README's
+[Reading from S3](../tpch/README.md#reading-from-s3) describes.
 
 ## Data
 

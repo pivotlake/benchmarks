@@ -25,6 +25,9 @@
 #
 # Environment (run-all.sh sets it):
 #   BENCH_DATA         dataset directory, one subdirectory of parquet per table
+#   BENCH_S3           the same dataset in a bucket, <DATASETS_URL>/<suite>/sf<N>,
+#                      which the <engine>-s3 engines read instead (with
+#                      AWS_REGION and the AWS CLI's credentials in the environment)
 #   BENCH_SF           its scale factor
 #   BENCH_RESTARTABLE  "yes" (default) when the engine runs a server
 #   BENCH_TIMEOUT      seconds the whole power run may take (default 3600)

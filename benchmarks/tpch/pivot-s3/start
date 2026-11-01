@@ -1,0 +1,36 @@
+#!/bin/bash
+set -eu
+: "${PIVOT_HOME:=$HOME/.pivot}"
+: "${PIVOT_BINARY:=$PIVOT_HOME/cli/latest/pivot}"
+: "${PIVOT_PORT:=5432}"
+: "${BENCH_S3:?}" "${AWS_REGION:?}" "${AWS_ACCESS_KEY_ID:?}" "${AWS_SECRET_ACCESS_KEY:?}"
+
+./check 2>/dev/null && exit 0
+
+# The datastore (its catalog and the tables' Delta logs) lives in the bucket
+# beside the dataset, and reads it with the keys in the environment through a
+# secret in the config file. The secret carries no session token, so the keys
+# must be a user's, and the file is kept private.
+[ -z "${AWS_SESSION_TOKEN:-}" ] ||
+    { echo "start: pivot's S3 secret takes an access key, not a session token (AWS_SESSION_TOKEN)" >&2; exit 1; }
+bucket="${BENCH_S3#s3://}"
+umask 077
+cat > config.yaml <<CONFIG
+server:
+  bind: 127.0.0.1:$PIVOT_PORT
+datastores:
+  default:
+    kind: pivot
+    location: $BENCH_S3-pivot/
+    default: true
+secrets:
+  bucket:
+    type: s3
+    scope: s3://${bucket%%/*}/
+    region: $AWS_REGION
+    access_key_id: $AWS_ACCESS_KEY_ID
+    secret_access_key: $AWS_SECRET_ACCESS_KEY
+CONFIG
+
+nohup "$PIVOT_BINARY" server --config "$PWD/config.yaml" > server.log 2>&1 &
+echo $! > server.pid

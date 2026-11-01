@@ -38,6 +38,12 @@ ENGINES = {
     "datafusion-partitioned": ("DataFusion (Parquet)", ["Rust", "column-oriented", "embedded", "Parquet", "stateless"]),
     "spark": ("Apache Spark", ["Java", "column-oriented", "Parquet", "stateless"]),
     "starrocks": ("StarRocks", ["C++", "column-oriented"]),
+    # The same files read from S3 rather than the local disk.
+    "pivot-s3": ("pivot (Parquet, S3)", ["Rust", "column-oriented", "Parquet", "stateless"]),
+    "duckdb-s3": ("DuckDB (Parquet, S3)", ["C++", "column-oriented", "embedded", "Parquet", "stateless"]),
+    "clickhouse-s3": ("ClickHouse (Parquet, S3)", ["C++", "column-oriented", "Parquet", "stateless"]),
+    "datafusion-s3": ("DataFusion (Parquet, S3)", ["Rust", "column-oriented", "embedded", "Parquet", "stateless"]),
+    "spark-s3": ("Apache Spark (Parquet, S3)", ["Java", "column-oriented", "Parquet", "stateless"]),
 }
 CLICKBENCH_NAMES = {"spark": "Apache Spark (Parquet)"}
 CLICKBENCH_QUERIES = 43

@@ -12,6 +12,9 @@
 /benchmarks/*/pivot/config.yaml
 /benchmarks/*/pivot/server.log
 /benchmarks/*/pivot/server.pid
+/benchmarks/*/pivot-s3/config.yaml
+/benchmarks/*/pivot-s3/server.log
+/benchmarks/*/pivot-s3/server.pid
 /benchmarks/*/clickhouse/clickhouse
 /benchmarks/*/clickhouse/access/
 /benchmarks/*/clickhouse/data/
@@ -19,10 +22,17 @@
 /benchmarks/*/clickhouse/server.log
 /benchmarks/*/clickhouse/server.pid
 /benchmarks/*/clickhouse-parquet/clickhouse
+/benchmarks/*/clickhouse-s3/clickhouse
 /benchmarks/*/datafusion/bin/
 /benchmarks/*/datafusion/.crates.toml
 /benchmarks/*/datafusion/.crates2.json
+/benchmarks/*/datafusion-s3/bin/
+/benchmarks/*/datafusion-s3/.crates.toml
+/benchmarks/*/datafusion-s3/.crates2.json
 /benchmarks/*/spark/myenv
+/benchmarks/*/spark-s3/myenv
+/benchmarks/*/spark-s3/ivy/
+/benchmarks/*/spark-s3/tables.txt
 /benchmarks/*/starrocks/StarRocks-*
 /benchmarks/*/starrocks/.sr_dir
 

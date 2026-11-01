@@ -14,7 +14,7 @@ on:
   workflow_dispatch:
     inputs:
       databases:
-        description: 'Databases, space-separated (pivot duckdb duckdb-parquet clickhouse clickhouse-parquet datafusion spark starrocks)'
+        description: 'Databases, space-separated (pivot duckdb duckdb-parquet clickhouse clickhouse-parquet datafusion spark starrocks; pivot-s3 duckdb-s3 clickhouse-s3 datafusion-s3 spark-s3 read the dataset in S3)'
         type: string
         default: 'pivot duckdb duckdb-parquet clickhouse clickhouse-parquet datafusion spark starrocks'
       benchmarks:

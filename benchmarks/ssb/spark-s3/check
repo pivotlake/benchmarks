@@ -1,0 +1,4 @@
+#!/bin/bash
+set -e
+
+myenv/bin/python -c 'import pyspark' >/dev/null 2>&1
