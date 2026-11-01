@@ -27,9 +27,11 @@ c8gd.4xlarge), run. Then:
    died, the benchmark failed or produced no result; the artifact is kept
    either way. Cancelling the job terminates the machine.
 
-A run job can wait at most 6 hours (GitHub's limit); the `timeout` input caps
-the machine. A machine that outlives its job still finishes, uploads and
-publishes its result on its own; only the artifact is lost. A default run is
+A run job waits for its machine for at most 5½ hours, then ends with a
+warning: GitHub's 6-hour limit would otherwise cancel the job, and a cancelled
+job terminates its machine. A machine that outlives its job still finishes,
+uploads and publishes its result on its own; only the artifact is lost. The
+`timeout` input caps the machine itself. A default run is
 37 jobs: eight databases on TPC-H and SSB at two scale factors each and on
 ClickBench, less the combinations that don't exist.
 

@@ -132,14 +132,28 @@ jobs:
           instance_profile: ${{ vars.INSTANCE_PROFILE }}
         run: date="${run%%/*}" benchmarks/launch.sh
 
+      # The wait gives up before the job's own time limit: a job that GitHub cuts
+      # off counts as cancelled, which would terminate the machine below. A
+      # machine still running then just carries on and publishes its result
+      # itself; only the artifact is missed.
       - name: Wait for the machine to finish
+        id: wait
         env:
           instance_id: ${{ steps.launch.outputs.instance_id }}
         run: |
           echo "waiting for $instance_id; its upload will be at s3://$bucket/$database/$run/$key/$machine/"
+          deadline=$(( $(date +%s) + 330 * 60 ))
+          echo "finished=true" >> "$GITHUB_OUTPUT"
           # Only "terminated", or the instance no longer being known to EC2, ends
           # the wait; any other failure of the call is retried.
           while :; do
+            if [ "$(date +%s)" -gt "$deadline" ]; then
+              echo "finished=false" >> "$GITHUB_OUTPUT"
+              echo "::warning::$instance_id is still running after 5½ hours. It will finish, upload and publish its result on its own; this job stops waiting so GitHub does not cancel it and terminate the machine."
+              echo "### $key: $database on $machine" >> "$GITHUB_STEP_SUMMARY"
+              echo "- still running after 5½ hours; publishes its result on its own, no artifact" >> "$GITHUB_STEP_SUMMARY"
+              break
+            fi
             if out=$(aws ec2 describe-instances --instance-ids "$instance_id" \
                 --query 'Reservations[0].Instances[0].State.Name' --output text 2>&1); then
               state=$out
@@ -157,6 +171,7 @@ jobs:
 
       - name: Download its results
         id: download
+        if: steps.wait.outputs.finished == 'true'
         run: |
           dir="out/$key/$machine"
           aws s3 cp --recursive "s3://$bucket/$database/$run/$key/$machine/" "$dir/"
@@ -174,13 +189,15 @@ jobs:
           echo "- $(jq "$completed" "$dir/result.json") of $(jq '.result | length' "$dir/result.json") queries completed; $(grep -m1 '^published latest/' "$dir/run.log" || echo 'NOT published by the machine, see run.log')" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Keep the upload as an artifact
-        if: always() && steps.launch.outcome == 'success'
+        if: always() && steps.launch.outcome == 'success' && steps.wait.outputs.finished == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: results-${{ matrix.key }}-${{ matrix.database }}-${{ matrix.machine }}
           path: out/
           if-no-files-found: warn
 
+      # Only a cancel by hand reaches this: the wait above ends before the job's
+      # time limit, so GitHub never cancels the job itself.
       - name: Terminate the machine if the job was cancelled
         if: cancelled() && steps.launch.outputs.instance_id != ''
         run: aws ec2 terminate-instances --instance-ids "${{ steps.launch.outputs.instance_id }}"
