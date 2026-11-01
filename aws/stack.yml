@@ -37,14 +37,15 @@ Resources:
     Type: AWS::S3::Bucket
     Properties:
       BucketName: !If [NamedBucket, !Ref BucketName, !Ref AWS::NoValue]
-      PublicAccessBlockConfiguration:   # latest/ is public by the bucket policy below; nothing else
+      PublicAccessBlockConfiguration:   # the whole bucket is public to read, by the policy below
         BlockPublicAcls: true
         BlockPublicPolicy: false
         IgnorePublicAcls: true
         RestrictPublicBuckets: false
 
-  # The site box builds the website's data from latest/ without credentials:
-  # the results are public, the runs' logs and the datasets are not.
+  # Everything is public to read and list: the results (the site box builds
+  # the website's data from latest/ without credentials), the runs' logs and
+  # the datasets. Downloads are billed to the account.
   ResultsBucketPolicy:
     Type: AWS::S3::BucketPolicy
     Properties:
@@ -55,13 +56,11 @@ Resources:
           - Effect: Allow
             Principal: '*'
             Action: s3:GetObject
-            Resource: !Sub '${ResultsBucket.Arn}/latest/*'
+            Resource: !Sub '${ResultsBucket.Arn}/*'
           - Effect: Allow
             Principal: '*'
             Action: s3:ListBucket
             Resource: !GetAtt ResultsBucket.Arn
-            Condition:
-              StringLike: { 's3:prefix': 'latest/*' }
 
   # What a benchmark machine may do: upload its results.
   MachineRole:

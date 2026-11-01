@@ -54,9 +54,13 @@ s3://<bucket>/
 │                                          the file's name under latest/; written last
 ├── latest/                          what the website shows: one file per database,
 │   └── <benchmark>/<engine>/<machine>[.sf<N>].json   benchmark, machine and scale factor,
-│                                    replaced by every run that succeeds. Public.
+│                                    replaced by every run that succeeds
 └── datasets/<suite>/sf<N>/          the datasets the machines fetch (lib/dataset.sh)
 ```
+
+The whole bucket is public to read and list, at
+`https://pivotbench.s3.eu-central-1.amazonaws.com/<key>`; downloads are
+billed to the account.
 
 The artifact of a run job is that machine's folder, unchanged.
 
@@ -67,7 +71,7 @@ query texts, baked by Deploy Web from the repository; and `data.js`, the
 results, which the site box rebuilds itself. Deploy Web installs
 `website/refresh-results.sh` and `generate-results.sh` in `~/benchmark-refresh`
 on the box with a cron line every five minutes: the script lists the bucket's
-`latest/` (public, no credentials), and only when a result was added, changed
+`latest/` (no credentials, the bucket is public), and only when a result was added, changed
 or removed since its last run does it sync and rebuild `data.js` into the
 docroot. So a run's results are on the site within five minutes of its
 machines finishing, with nothing to trigger.
