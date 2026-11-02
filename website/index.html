@@ -320,7 +320,7 @@ function defaults(b) {
     return {
         benchmark: b,
         metric: BENCHMARKS[b].defaultMetric,
-        sf: sfs.length ? Math.max(...sfs) : null,
+        sf: sfs.length ? Math.min(...sfs) : null,
         system: map(uniq(es.map(e => e.system))),
         machine: map(uniq(es.map(e => e.machine))),
     };
