@@ -34,8 +34,8 @@
 #   clickhouse-s3        tpch/ssb: clickhouse-s3      (no ClickBench entry)
 #   datafusion-s3        tpch/ssb: datafusion-s3      (no ClickBench entry)
 #   spark-s3             tpch/ssb: spark-s3           (no ClickBench entry)
-# The -s3 databases read the dataset in S3 (DATASETS_URL names the bucket)
-# and run only when named.
+# The -s3 databases read the dataset in S3 (the bucket DATASETS_URL names,
+# s3://pivotbench/datasets by default) and run only when named.
 # DATA_DIR, DATASETS_URL, PIVOT_BINARY and BENCH_TIMEOUT pass through to the runs.
 
 set -u
@@ -90,8 +90,9 @@ for benchmark in $benchmarks; do
 done
 
 if [ -z "$machine" ]; then
-    token=$(curl -s -m 2 -X PUT http://169.254.169.254/latest/api/token -H 'X-aws-ec2-metadata-token-ttl-seconds: 60' 2>/dev/null || true)
-    [ -z "$token" ] || machine=$(curl -s -m 2 -H "X-aws-ec2-metadata-token: $token" http://169.254.169.254/latest/meta-data/instance-type 2>/dev/null || true)
+    # -f: a box that is not EC2 may answer that address with an error page
+    token=$(curl -sf -m 2 -X PUT http://169.254.169.254/latest/api/token -H 'X-aws-ec2-metadata-token-ttl-seconds: 60' 2>/dev/null || true)
+    [ -z "$token" ] || machine=$(curl -sf -m 2 -H "X-aws-ec2-metadata-token: $token" http://169.254.169.254/latest/meta-data/instance-type 2>/dev/null || true)
     [ -n "$machine" ] || machine=$(hostname -s)
 fi
 date=$(date +%F)

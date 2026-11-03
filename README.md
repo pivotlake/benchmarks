@@ -44,16 +44,16 @@ git clone --recurse-submodules https://github.com/pivotlake/benchmarks.git
 cd benchmarks
 benchmarks/tpch/run-all.sh 100                  # every local engine at TPC-H SF100
 benchmarks/ssb/run-all.sh 1000 pivot duckdb     # two engines at SSB SF1000
-DATASETS_URL=s3://pivotbench/datasets benchmarks/tpch/run-all.sh 1000 pivot-s3 duckdb-s3   # two engines over the files in S3
+benchmarks/tpch/run-all.sh 1000 pivot-s3 duckdb-s3   # two engines over the files in S3
 benchmarks/clickbench/run-all.sh                # the default ClickBench systems
 ```
 
 The engines that read the parquet files in place (pivot, DuckDB, ClickHouse,
 DataFusion and Spark) also come as `<engine>-s3`, reading the same files from
-the bucket `DATASETS_URL` names, where `benchmarks/lib/dataset.sh` keeps the
-datasets (`s3://pivotbench/datasets` holds the usual scale factors and is
-public, so a box without AWS credentials reads it too; pivot alone needs keys);
-`benchmarks/tpch/README.md` has the details.
+the bucket where `benchmarks/lib/dataset.sh` keeps the datasets:
+`s3://pivotbench/datasets` unless `DATASETS_URL` names another. It holds the
+usual scale factors and is public, so a box without AWS credentials reads it
+too; pivot alone needs keys. `benchmarks/tpch/README.md` has the details.
 
 `benchmarks/tpch/` and `benchmarks/ssb/` each hold their queries, a data
 generator and one directory per engine with ClickBench's small scripts plus

@@ -31,7 +31,7 @@ ClickBench turns off (the restart before the power run empties it anyway).
 ./run-all.sh 1000 pivot duckdb clickhouse          # some engines at SF1000
 DATA_DIR=/mnt/nvme/tpch ./run-all.sh 1000          # datasets on another disk
 PIVOT_BINARY=~/pivot/target/release/pivot ./run-all.sh 100 pivot
-DATASETS_URL=s3://pivotbench/datasets ./run-all.sh 100 pivot-s3 duckdb-s3   # over the files in S3
+./run-all.sh 100 pivot-s3 duckdb-s3                # over the files in S3
 ```
 
 Nothing is installed system-wide beyond packages: each engine keeps its
@@ -64,11 +64,12 @@ The `-s3` engines are the engines that read the parquet files in place, run
 once more over the same files in S3: `pivot-s3`, `duckdb-s3`,
 `clickhouse-s3`, `datafusion-s3` and `spark-s3` are their local counterparts'
 scripts pointed at `DATASETS_URL/tpch/sf<N>/<table>/*.parquet`, the dataset
-`../lib/dataset.sh` built there. They run only when named, need
-`DATASETS_URL` and the AWS CLI, and a scale factor the bucket holds needs no
-local copy at all; one it lacks is built with `dataset.sh build`, not by the
-run. `s3://pivotbench/datasets` is in eu-central-1: to measure the engines
-rather than the network, run from a box in the bucket's region.
+`../lib/dataset.sh` built there (`s3://pivotbench/datasets` unless
+`DATASETS_URL` is set). They run only when named, need the AWS CLI, and a
+scale factor the bucket holds needs no local copy at all; one it lacks is
+built with `dataset.sh build`, not by the run. `s3://pivotbench/datasets` is
+in eu-central-1: to measure the engines rather than the network, run from a
+box in the bucket's region.
 
 Each engine reads the bucket the way it reads S3 by default: DuckDB through
 `httpfs` with a `credential_chain` secret, `clickhouse-local` through its `S3`

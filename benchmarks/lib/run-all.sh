@@ -20,7 +20,7 @@
 #   DATA_DIR       where datasets go (default ./datasets)
 #   DATASETS_URL   fetch datasets from <url>/<suite>/sf<N> instead of generating,
 #                  when there is one (see lib/dataset.sh); the -s3 engines read
-#                  that dataset in place, so they need it (s3://pivotbench/datasets)
+#                  that dataset in place (default for them: s3://pivotbench/datasets)
 #   PIVOT_BINARY   run a pivot you built instead of the latest release
 #   BENCH_TIMEOUT  seconds the whole power run may take (default 3600)
 
@@ -76,16 +76,16 @@ dataset="$data_dir/sf$sf"
 results="$PWD/results/sf$sf"
 
 # The -s3 engines read the dataset lib/dataset.sh built at
-# $DATASETS_URL/<suite>/sf<N> (its manifest says it is all there), in the
+# $DATASETS_URL/<suite>/sf<N> (its manifest says it is all there; the public
+# bucket s3://pivotbench/datasets when DATASETS_URL is not set), in the
 # bucket's region, with the credentials the AWS CLI resolves, exported for the
 # engines that take them from the environment. With none anywhere the bucket
 # must be public, and the CLI and the engines read it unsigned
 # (BENCH_S3_ANONYMOUS; pivot-s3 cannot, it writes its datastore there). A
 # scale factor the bucket lacks is dataset.sh's job, not the run's.
 if [ ${#s3_engines[@]} -gt 0 ]; then
-    [ -n "${DATASETS_URL:-}" ] ||
-        { echo "${s3_engines[*]}: set DATASETS_URL to the bucket holding the datasets (s3://pivotbench/datasets)" >&2; exit 1; }
-    s3_dataset="${DATASETS_URL%/}/$suite/sf$sf"
+    s3_dataset="${DATASETS_URL:-s3://pivotbench/datasets}"
+    s3_dataset="${s3_dataset%/}/$suite/sf$sf"
     command -v aws >/dev/null ||
         { echo "${s3_engines[*]}: reading $s3_dataset needs the AWS CLI (aws)" >&2; exit 1; }
     [ -n "${AWS_ACCESS_KEY_ID:-}" ] || eval "$(aws_credentials)"

@@ -20,15 +20,15 @@ the five that read the same files from S3), all reading the same rows:
 ./run-all.sh 100                                   # all local engines at SF100
 ./run-all.sh 1000 pivot duckdb clickhouse          # some engines at SF1000
 PIVOT_BINARY=~/pivot/target/release/pivot ./run-all.sh 100 pivot
-DATASETS_URL=s3://pivotbench/datasets ./run-all.sh 100 pivot-s3 duckdb-s3   # over the files in S3
+./run-all.sh 100 pivot-s3 duckdb-s3                # over the files in S3
 ```
 
 It runs exactly like `../tpch` (see its README): a power run, the 13 queries
 back to back in one session from a cold start, timed end to end, with the same
 engine scripts, driver and comparison, and this suite's schema, queries and
 generator. The `-s3` engines read `DATASETS_URL/ssb/sf<N>`, the dataset
-`../lib/dataset.sh` built there (`s3://pivotbench/datasets` holds SF1, SF100
-and SF1000), the way the TPC-H README's
+`../lib/dataset.sh` built there (`s3://pivotbench/datasets` by default, which
+holds SF1, SF100 and SF1000), the way the TPC-H README's
 [Reading from S3](../tpch/README.md#reading-from-s3) describes.
 
 ## Data
