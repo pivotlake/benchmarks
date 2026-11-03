@@ -86,8 +86,19 @@ results="$PWD/results/sf$sf"
 if [ ${#s3_engines[@]} -gt 0 ]; then
     s3_dataset="${DATASETS_URL:-s3://pivotbench/datasets}"
     s3_dataset="${s3_dataset%/}/$suite/sf$sf"
-    command -v aws >/dev/null ||
-        { echo "${s3_engines[*]}: reading $s3_dataset needs the AWS CLI (aws)" >&2; exit 1; }
+    if ! command -v aws >/dev/null; then
+        # Ubuntu 24.04 has no awscli package: Amazon's installer, as in
+        # cloud-init.sh.in, which puts it in /usr/local/bin.
+        echo "${s3_engines[*]}: reading $s3_dataset needs the AWS CLI, installing it"
+        command -v unzip >/dev/null || { sudo apt-get update -y && sudo apt-get install -y unzip; }
+        tmp=$(mktemp -d)
+        curl -sSf "https://awscli.amazonaws.com/awscli-exe-linux-$(uname -m).zip" -o "$tmp/awscli.zip"
+        unzip -q "$tmp/awscli.zip" -d "$tmp"
+        sudo "$tmp/aws/install"
+        rm -rf "$tmp"
+        hash -r
+        aws --version
+    fi
     [ -n "${AWS_ACCESS_KEY_ID:-}" ] || eval "$(aws_credentials)"
     sign=()
     [ -n "${AWS_ACCESS_KEY_ID:-}" ] || { export BENCH_S3_ANONYMOUS=yes; sign=(--no-sign-request); }

@@ -65,9 +65,9 @@ once more over the same files in S3: `pivot-s3`, `duckdb-s3`,
 `clickhouse-s3`, `datafusion-s3` and `spark-s3` are their local counterparts'
 scripts pointed at `DATASETS_URL/tpch/sf<N>/<table>/*.parquet`, the dataset
 `../lib/dataset.sh` built there (`s3://pivotbench/datasets` unless
-`DATASETS_URL` is set). They run only when named, need the AWS CLI, and a
-scale factor the bucket holds needs no local copy at all; one it lacks is
-built with `dataset.sh build`, not by the run. `s3://pivotbench/datasets` is
+`DATASETS_URL` is set). They run only when named, install the AWS CLI if the
+box has none, and a scale factor the bucket holds needs no local copy at all;
+one it lacks is built with `dataset.sh build`, not by the run. `s3://pivotbench/datasets` is
 in eu-central-1: to measure the engines rather than the network, run from a
 box in the bucket's region.
 
