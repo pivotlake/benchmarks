@@ -73,6 +73,11 @@ if [ -n "$disks" ]; then
     mkfs.ext4 -F -E lazy_itable_init=0,lazy_journal_init=0 "$dev"
     mkdir -p /mnt/bench && mount -o noatime "$dev" /mnt/bench
     work=/mnt/bench
+    # ClickBench's ClickHouse entry installs the server system-wide, with its
+    # data in /var/lib/clickhouse: put that on the NVMe too, or its cold run
+    # measures the root volume.
+    mkdir -p /mnt/bench/var-lib-clickhouse /var/lib/clickhouse
+    mount --bind /mnt/bench/var-lib-clickhouse /var/lib/clickhouse
     disk="$n local NVMe $(lsblk -dno SIZE "$dev" | tr -d ' ')$([ "$n" -gt 1 ] && echo ' RAID 0')"
 fi
 cd "$work"
