@@ -31,17 +31,17 @@ suite="$(basename "$PWD")"
 
 # Every directory with an install script is an engine; the -s3 ones run only
 # when named.
-all_engines=()
 local_engines=()
+remote_engines=()
 for script in */install; do
     engine="$(dirname "$script")"
-    all_engines+=("$engine")
-    [[ $engine == *-s3 ]] || local_engines+=("$engine")
+    if [[ $engine == *-s3 ]]; then remote_engines+=("$engine"); else local_engines+=("$engine"); fi
 done
 
 usage() {
-    sed -n '3,25p' "$lib/run-all.sh" | sed 's/^# \{0,1\}//' >&2
-    echo "  $suite engines (default: all but the -s3 ones): ${all_engines[*]}" >&2
+    sed -n '3,/^$/p' "$lib/run-all.sh" | sed 's/^# \{0,1\}//' >&2
+    echo "  $suite engines: ${local_engines[*]} (the default)" >&2
+    echo "  over S3, only when named: ${remote_engines[*]}" >&2
     exit 1
 }
 

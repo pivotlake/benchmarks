@@ -60,7 +60,7 @@ engine_for() {
     esac
 }
 
-usage() { sed -n '3,30p' run-and-collect.sh | sed 's/^# \{0,1\}//' >&2; exit 1; }
+usage() { sed -n '3,/^$/p' run-and-collect.sh | sed 's/^# \{0,1\}//' >&2; exit 1; }
 
 while [ $# -gt 0 ]; do
     case "$1" in
