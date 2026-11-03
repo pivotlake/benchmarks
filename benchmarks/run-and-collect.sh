@@ -29,9 +29,13 @@
 #   datafusion           tpch/ssb: datafusion         clickbench: datafusion-partitioned
 #   spark                tpch/ssb: spark              clickbench: spark
 #   starrocks            tpch: starrocks              (no SSB or ClickBench entry)
-#   pivot-s3, duckdb-s3, clickhouse-s3, datafusion-s3, spark-s3
-#                        tpch/ssb: that engine over the dataset in S3 (needs
-#                        DATASETS_URL; no ClickBench entry; not run by default)
+#   pivot-s3             tpch/ssb: pivot-s3           (no ClickBench entry)
+#   duckdb-s3            tpch/ssb: duckdb-s3          (no ClickBench entry)
+#   clickhouse-s3        tpch/ssb: clickhouse-s3      (no ClickBench entry)
+#   datafusion-s3        tpch/ssb: datafusion-s3      (no ClickBench entry)
+#   spark-s3             tpch/ssb: spark-s3           (no ClickBench entry)
+# The -s3 databases read the dataset in S3 (DATASETS_URL names the bucket)
+# and run only when named.
 # DATA_DIR, DATASETS_URL, PIVOT_BINARY and BENCH_TIMEOUT pass through to the runs.
 
 set -u
