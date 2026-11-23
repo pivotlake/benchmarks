@@ -9,6 +9,7 @@
 # one benchmark (at one scale factor) and uploads what it produced to
 # s3://<bucket>/<database>/<date>/<time>-<run id>/<benchmark>[-sf<N>]/<machine>/:
 #   result.json            the result file (missing if the run produced none)
+#   ingest/                the ingest benchmark's results directory, when it ran
 #   <engine>.log           the harness log
 #   run.log, cloud-init-output.log
 #   meta.json              what ran, the exit status, and `path`: the result's
@@ -33,6 +34,10 @@ export DEBIAN_FRONTEND=noninteractive
 ulimit -n "$(ulimit -Hn)"
 export AWS_DEFAULT_REGION='@AWS_REGION@'
 export DATASETS_URL='s3://@bucket@/datasets'   # TPC-H and SSB datasets built by lib/dataset.sh
+# The ingest benchmark: where its lakes go, its options, the pivot it builds.
+export INGEST_LAKE_URL='s3://@bucket@/ingest-lakes'
+export INGEST_OPTIONS='@ingest_options@'
+export PIVOT_REF='@pivot_ref@'
 log=/root/run.log
 out=/root/out
 s3_dir='s3://@bucket@/@database@/@run@/@key@/@machine@'
@@ -101,11 +106,18 @@ echo "Finished: $(date '+%F %T'), ${SECONDS}s, exit $status" | tee -a "$log"
 mkdir -p "$out"
 # The one result file the run wrote, and where it goes on the website:
 # website/results/ is not in the repository, so whatever is there is the run's.
-result=$(find website/results -name '*.json' | head -n1)
+result=$(find website/results -name '*.json' 2>/dev/null | head -n1)
 path=""
 if [ -n "$result" ]; then
     cp "$result" "$out/result.json"
     path="${result#website/results/}"
+fi
+# The ingest benchmark has no place on the website: its result file is the
+# results of its layouts together, and it is not published to latest/.
+if [ '@benchmark@' = ingest ] && ls benchmarks/ingest/results/*/result.json >/dev/null 2>&1; then
+    jq -s '{benchmark: "ingest", machine: "@machine@", pivot_ref: "@pivot_ref@", result: .}' \
+        benchmarks/ingest/results/*/result.json > "$out/result.json"
+    cp -r benchmarks/ingest/results "$out/ingest"
 fi
 if [ '@benchmark@' = clickbench ]; then harness_log='benchmarks/clickbench/results/@engine@.log'; else harness_log='benchmarks/@benchmark@/results/sf@sf@/@engine@.log'; fi
 [ ! -f "$harness_log" ] || cp "$harness_log" "$out/@engine@.log"

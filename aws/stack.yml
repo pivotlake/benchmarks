@@ -84,6 +84,9 @@ Resources:
               - Effect: Allow   # the datasets, built and fetched by lib/dataset.sh
                 Action: [s3:GetObject, s3:ListBucket, s3:DeleteObject]
                 Resource: [!GetAtt ResultsBucket.Arn, !Sub '${ResultsBucket.Arn}/datasets/*']
+              - Effect: Allow   # the lakes the ingest benchmark writes and deletes (benchmarks/ingest/run.sh)
+                Action: [s3:GetObject, s3:DeleteObject, s3:AbortMultipartUpload]
+                Resource: !Sub '${ResultsBucket.Arn}/ingest-lakes/*'
   MachineInstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:

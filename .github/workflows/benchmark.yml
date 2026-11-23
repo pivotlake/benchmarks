@@ -18,7 +18,7 @@ on:
         type: string
         default: 'pivot duckdb duckdb-parquet clickhouse clickhouse-parquet datafusion spark starrocks'
       benchmarks:
-        description: 'Benchmarks, space-separated (tpch ssb clickbench)'
+        description: 'Benchmarks, space-separated (tpch ssb clickbench; ingest, on pivot only, when named)'
         type: string
         default: 'tpch ssb clickbench'
       scale_factors:
@@ -37,6 +37,14 @@ on:
         description: 'Seconds a machine may spend on its benchmark before it gives up (a job can wait at most 6 hours)'
         type: string
         default: '18000'
+      ingest_options:
+        description: 'ingest only: options of benchmarks/ingest/run.sh, without single quotes'
+        type: string
+        default: '--layouts "spread ordered" --loads "100x1MiB" --step-seconds 300 --query-range 900'
+      pivot_ref:
+        description: 'ingest only: branch, tag or commit of pivotlake/pivot to build and benchmark (empty: the latest release)'
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -69,7 +77,7 @@ jobs:
         run: |
           jobs='[]'
           for benchmark in $benchmarks; do
-            if [ "$benchmark" = clickbench ]; then sfs=""; else sfs="$scale_factors"; fi
+            if [ "$benchmark" = clickbench ] || [ "$benchmark" = ingest ]; then sfs=""; else sfs="$scale_factors"; fi
             for sf in ${sfs:-none}; do
               [ "$sf" != none ] || sf=""
               key="$benchmark${sf:+-sf$sf}"
@@ -126,6 +134,8 @@ jobs:
           engine: ${{ matrix.engine }}
           disk: ${{ inputs.disk }}
           timeout: ${{ inputs.timeout }}
+          ingest_options: ${{ inputs.ingest_options }}
+          pivot_ref: ${{ inputs.pivot_ref }}
           repo: ${{ github.repository }}
           branch: ${{ github.ref_name }}
           run_url: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
@@ -185,6 +195,13 @@ jobs:
           status=$(jq -r .status "$dir/meta.json")
           [ "$status" = 0 ] || { echo "::error::run-and-collect.sh exited $status on the machine; see run.log in the artifact."; exit 1; }
           [ -f "$dir/result.json" ] || { echo "::error::The run produced no result file; see run.log in the artifact."; exit 1; }
+          if [ "$key" = ingest ]; then
+            # One table per layout, as the machine printed it; nothing goes to latest/.
+            for summary in "$dir"/ingest/*/summary.txt; do
+              { echo '```'; cat "$summary"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+            done
+            exit 0
+          fi
           completed='[.result[] | if type == "array" then any(.[]; . != null) else . != null end] | map(select(.)) | length'
           echo "- $(jq "$completed" "$dir/result.json") of $(jq '.result | length' "$dir/result.json") queries completed; $(grep -m1 '^published latest/' "$dir/run.log" || echo 'NOT published by the machine, see run.log')" >> "$GITHUB_STEP_SUMMARY"
 

@@ -22,6 +22,10 @@
 #   instance_profile     IAM instance profile that may write to the bucket
 #   disk                 root volume, GB (default 500)
 #   timeout              seconds run-and-collect.sh may take (default 18000)
+#   ingest_options       the ingest benchmark's options (ingest/run.sh), without
+#                        single quotes
+#   pivot_ref            branch, tag or commit of pivot the ingest benchmark
+#                        builds (default: the latest release)
 #   AWS_REGION           where to launch
 
 set -euo pipefail
@@ -35,7 +39,10 @@ sleep $(( RANDOM % 30 ))
 
 : "${database:?}" "${machine:?}" "${benchmark:?}" "${key:?}" "${engine:?}" "${repo:?}" "${branch:?}"
 : "${run_id:?}" "${run_url:?}" "${run:?}" "${bucket:?}" "${instance_profile:?}" "${AWS_REGION:?}"
-: "${sf:=}" "${disk:=500}" "${timeout:=18000}"
+: "${sf:=}" "${disk:=500}" "${timeout:=18000}" "${ingest_options:=}" "${pivot_ref:=}"
+# Both are written between single quotes into the machine's script.
+case "$ingest_options$pivot_ref" in *"'"*) echo "ingest_options and pivot_ref may not hold single quotes" >&2; exit 1 ;; esac
+export ingest_options pivot_ref
 
 arch=$(aws ec2 describe-instance-types --instance-types "$machine" \
     --query 'InstanceTypes[0].ProcessorInfo.SupportedArchitectures[0]' --output text)
@@ -50,7 +57,7 @@ import os, sys
 template, out = sys.argv[1:]
 text = open(template).read()
 for name in ("database", "machine", "benchmark", "sf", "key", "engine", "repo", "branch", "run_id", "run_url", "run", "date",
-             "bucket", "timeout", "AWS_REGION"):
+             "bucket", "timeout", "AWS_REGION", "ingest_options", "pivot_ref"):
     text = text.replace(f"@{name}@", os.environ.get(name, ""))
 open(out, "w").write(text)
 PY

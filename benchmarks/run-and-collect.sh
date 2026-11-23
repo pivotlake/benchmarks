@@ -11,7 +11,8 @@
 #
 # Usage: ./run-and-collect.sh [options]
 #   --databases "pivot duckdb ..."   default: every database below
-#   --benchmarks "tpch ssb clickbench"   default: all three
+#   --benchmarks "tpch ssb clickbench"   default: all three; "ingest" is run
+#                                    only when named (see ingest/run.sh)
 #   --sf "100 1000"                  TPC-H and SSB scale factors, each run in
 #                                    turn (default 100)
 #   --machine <name>                 for the results (default: the EC2 instance
@@ -30,6 +31,11 @@
 #   spark                tpch/ssb: spark              clickbench: spark
 #   starrocks            tpch: starrocks              (no SSB or ClickBench entry)
 # DATA_DIR, PIVOT_BINARY and BENCH_TIMEOUT pass through to the runs.
+#
+# ingest is pivot's alone and has no result file for the website: it runs
+# ingest/run.sh with the options in INGEST_OPTIONS (its lake from
+# INGEST_LAKE_URL) and leaves its results in ingest/results/. PIVOT_REF builds
+# pivot from that branch, tag or commit first (ingest/build-pivot.sh).
 
 set -u
 cd "$(dirname "$0")"
@@ -50,6 +56,8 @@ engine_for() {
         clickbench/clickhouse-parquet) echo clickhouse-parquet-partitioned ;;
         clickbench/datafusion)         echo datafusion-partitioned ;;
         clickbench/starrocks)          ;;
+        ingest/pivot)                  echo pivot ;;
+        ingest/*)                      ;;
         ssb/starrocks)                 ;;
         */*)                           echo "$database" ;;
     esac
@@ -77,7 +85,7 @@ for database in $databases; do
     esac
 done
 for benchmark in $benchmarks; do
-    [ -f "$benchmark/run-all.sh" ] || { echo "unknown benchmark: $benchmark" >&2; usage; }
+    [ -f "$benchmark/run-all.sh" ] || [ -f "$benchmark/run.sh" ] || { echo "unknown benchmark: $benchmark" >&2; usage; }
 done
 
 if [ -z "$machine" ]; then
@@ -98,6 +106,19 @@ for benchmark in $benchmarks; do
         [ -z "$engine" ] || engines+=("$engine")
     done
     [ ${#engines[@]} -gt 0 ] || { echo "$benchmark: none of the databases has an entry, skipped"; continue; }
+
+    if [ "$benchmark" = ingest ]; then
+        [ "$collect_only" = no ] || continue
+        echo
+        echo "##### ingest: ${INGEST_OPTIONS:-}, $(date '+%F %T')"
+        if [ -n "${PIVOT_REF:-}" ] && [ -z "${PIVOT_BINARY:-}" ]; then
+            PIVOT_BINARY=$(ingest/build-pivot.sh "$PIVOT_REF") || { failed+=("ingest: building pivot at $PIVOT_REF"); continue; }
+            export PIVOT_BINARY
+        fi
+        # The options are words as a shell splits them, quotes included.
+        eval "ingest/run.sh ${INGEST_OPTIONS:-}" || failed+=("ingest")
+        continue
+    fi
 
     # ClickBench has no scale factor: one run; TPC-H and SSB: one per scale factor.
     if [ "$benchmark" = clickbench ]; then run_sfs=""; else run_sfs="$sfs"; fi

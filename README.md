@@ -10,6 +10,10 @@ engine and prints one comparison:
 - [`benchmarks/clickbench/`](benchmarks/clickbench): ClickBench, through ClickBench's own harness
   (our fork, which carries the pivot entries, as a submodule).
 
+[`benchmarks/ingest/`](benchmarks/ingest) is pivot on its own: how much ingest
+it sustains into a table in S3 while a query keeps running, at the insert rates
+and sizes you name.
+
 [`website/`](website) shows the results the way ClickBench's site does, at
 benchmark.pivotlake.io. The results live in S3, one JSON per system, machine
 and scale factor under the bucket's `latest/`, which every benchmark machine

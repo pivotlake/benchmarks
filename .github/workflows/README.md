@@ -27,6 +27,13 @@ c8gd.4xlarge), run. Then:
    died, the benchmark failed or produced no result; the artifact is kept
    either way. Cancelling the job terminates the machine.
 
+The ingest benchmark (`benchmarks/ingest/`) runs only when `ingest` is named
+under benchmarks, on pivot alone. Its machine takes `run.sh`'s options from
+the `ingest_options` input and, when `pivot_ref` is set, builds pivot from that
+branch, tag or commit first. Its lakes go under the bucket's `ingest-lakes/`
+and are deleted as each run ends. Nothing of it goes to `latest/`: the job's
+summary shows the tables, and the upload holds its results under `ingest/`.
+
 A run job waits for its machine for at most 5½ hours, then ends with a
 warning: GitHub's 6-hour limit would otherwise cancel the job, and a cancelled
 job terminates its machine. A machine that outlives its job still finishes,
@@ -55,7 +62,8 @@ s3://<bucket>/
 ├── latest/                          what the website shows: one file per database,
 │   └── <benchmark>/<engine>/<machine>[.sf<N>].json   benchmark, machine and scale factor,
 │                                    replaced by every run that succeeds
-└── datasets/<suite>/sf<N>/          the datasets the machines fetch (lib/dataset.sh)
+├── datasets/<suite>/sf<N>/          the datasets the machines fetch (lib/dataset.sh)
+└── ingest-lakes/                    the lakes of ingest runs in progress; each run deletes its own
 ```
 
 The whole bucket is public to read and list, at
@@ -107,7 +115,7 @@ bucket first). To do it by hand instead, the stack holds:
 | Variable | What it names |
 |---|---|
 | `AWS_ROLE_ARN` | the launcher role: trusts GitHub's OIDC provider for `repo:pivotlake/benchmarks:*` and its immutable-subject form `repo:pivotlake@<id>/benchmarks@<id>:*`; may `ec2:RunInstances`, `ec2:CreateTags`, `ec2:DescribeImages`, `ec2:DescribeInstanceTypes`, `ec2:DescribeInstances`, `ec2:TerminateInstances` on machines named `pivot-benchmarks-*`, `iam:PassRole` on the machine role, and list and read the bucket, and write its `latest/` |
-| `INSTANCE_PROFILE` | the machines' instance profile: a role EC2 assumes, with `s3:PutObject` on the bucket |
+| `INSTANCE_PROFILE` | the machines' instance profile: a role EC2 assumes, with `s3:PutObject` on the bucket, and reading and deleting under its `datasets/` and `ingest-lakes/` |
 | `RESULTS_BUCKET` | a private S3 bucket |
 | `AWS_REGION` | where the machines launch, the bucket is, and the stack was deployed |
 
