@@ -14,7 +14,7 @@ operators pin, which only their holder gives back, and the bytes its caches
 hold, which the pool takes back when it runs short. Memory outside the pool
 is the server's resident memory less the pool.
 
-Usage: summarize.py <results directory> --layout <name> --query-range <seconds> --connections <count>
+Usage: summarize.py <results directory> --engine <name> --layout <name> --query-range <seconds> --connections <count>
 """
 
 import argparse
@@ -26,6 +26,7 @@ import statistics
 
 parser = argparse.ArgumentParser()
 parser.add_argument("results", type=pathlib.Path)
+parser.add_argument("--engine", required=True)
 parser.add_argument("--layout", required=True)
 parser.add_argument("--query-range", type=int, required=True)
 parser.add_argument("--connections", type=int, required=True)
@@ -128,10 +129,16 @@ for line in (results / "steps.tsv").read_text().splitlines():
     index, load, inserts_per_second, insert_bytes, started, ended, loader_status = line.split("\t")
     started, ended = int(started), int(ended)
     insert_latencies, insert_byte_counts, insert_starts = [], [], []
+    insert_errors, first_insert_start = 0, None
     query_latencies, query_errors = [], 0
     for event in (results / f"loader-{index}.log").read_text().splitlines():
-        fields = event.split(" ", 4)
+        fields = event.split(" ", 5)
         if fields[0] == "insert":
+            if first_insert_start is None:
+                first_insert_start = float(fields[1])
+            if fields[4] == "ERROR":
+                insert_errors += 1
+                continue
             insert_starts.append(float(fields[1]))
             insert_latencies.append(float(fields[2]))
             insert_byte_counts.append(int(fields[3]))
@@ -142,7 +149,7 @@ for line in (results / "steps.tsv").read_text().splitlines():
                 query_latencies.append(float(fields[2]))
     # The loader generates its batches before the first insert, so the rate
     # is over the time it spent inserting.
-    inserting_seconds = (ended - min(insert_starts)) if insert_starts else 0
+    inserting_seconds = (ended - first_insert_start) if insert_starts else 0
     in_step = [sample for sample in samples if started <= sample["time"] <= ended]
     live_files = [(sample["time"], sample["live_files"]) for sample in in_step if sample["live_files"] is not None]
     files_per_minute = fit_change_per_minute(live_files)
@@ -160,6 +167,7 @@ for line in (results / "steps.tsv").read_text().splitlines():
             "per_second": round(len(insert_starts) / inserting_seconds, 2) if inserting_seconds else 0,
             "mebibytes_per_second": round(sum(insert_byte_counts) / MEBIBYTE / inserting_seconds, 2) if inserting_seconds else 0,
             "latency": summarize_latencies(insert_latencies),
+            "errors": insert_errors,
         },
         "query": {"latency": summarize_latencies(query_latencies), "errors": query_errors},
         "live_files": {
@@ -173,12 +181,14 @@ for line in (results / "steps.tsv").read_text().splitlines():
             "cached": summarize_bytes([(sample["time"], sample["pool_cached_bytes"]) for sample in in_step
                                        if sample["pool_cached_bytes"] is not None]),
         },
+        "resident_memory": summarize_bytes([(sample["time"], sample["resident_bytes"]) for sample in in_step]),
         "memory_outside_pool": summarize_bytes(
             [(sample["time"], sample["resident_bytes"] - pool_bytes) for sample in in_step] if pool_bytes else []),
     })
 
 result = {
     "benchmark": "ingest",
+    "engine": arguments.engine,
     "layout": arguments.layout,
     "query_range_seconds": arguments.query_range,
     "connections": arguments.connections,
@@ -208,13 +218,13 @@ def print_table(rows):
         print("  ".join(cell.rjust(width) for cell, width in zip(row, widths)))
 
 
-print(f"ingest, {arguments.layout} layout, query over the last "
+print(f"ingest, {arguments.engine}, {arguments.layout} layout, query over the last "
       f"{arguments.query_range or 'all'} seconds, {arguments.connections} connections, "
       f"buffer pool {show(round(pool_bytes / MEBIBYTE) if pool_bytes else None)} MiB")
 print()
-speed = [["load", "MiB/s asked", "MiB/s done", "inserts/s", "insert ms: mean", "median", "p99", "max",
+speed = [["load", "MiB/s asked", "MiB/s done", "inserts/s", "refused", "insert ms: mean", "median", "p99", "max",
           "queries", "errors", "query ms: mean", "median", "p99", "max", "live files", "files/min"]]
-resources = [["load", "machine busy %", "server cores", "loader cores",
+resources = [["load", "machine busy %", "server cores", "loader cores", "resident MiB: end", "max",
               "pool pinned MiB: end", "mean", "max", "per min",
               "pool cached MiB: end", "outside pool MiB: end", "max", "per min"]]
 for step in steps:
@@ -224,6 +234,7 @@ for step in steps:
         f"{step['requested']['mebibytes_per_second']:g}",
         f"{step['inserts']['mebibytes_per_second']:g}",
         f"{step['inserts']['per_second']:g}",
+        show(step["inserts"]["errors"]),
         *show_latency(step["inserts"]["latency"]),
         show(query["latency"]["count"] if query["latency"] else 0),
         show(query["errors"]),
@@ -235,6 +246,7 @@ for step in steps:
     resources.append([
         step["load"],
         *(["-"] * 3 if cpu is None else [show(cpu["machine_busy_percent"]), show(cpu["server_cores"]), show(cpu["loader_cores"])]),
+        *show_bytes(step["resident_memory"], ("mebibytes_at_end", "mebibytes_max")),
         *show_bytes(step["buffer_pool"]["pinned"],
                     ("mebibytes_at_end", "mebibytes_mean", "mebibytes_max", "mebibytes_change_per_minute")),
         *show_bytes(step["buffer_pool"]["cached"], ("mebibytes_at_end",)),

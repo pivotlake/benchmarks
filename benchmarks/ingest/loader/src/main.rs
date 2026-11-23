@@ -1,21 +1,30 @@
-//! Inserts synthetic log rows into a table at a fixed rate, as `COPY ... FROM
-//! STDIN` statements of Arrow IPC, and meanwhile runs one query again and
-//! again. Prints a line per insert and per query run, then exits once its
-//! time is up.
+//! Inserts synthetic log rows into a table at a fixed rate and meanwhile
+//! runs one query again and again. Prints a line per insert and per query
+//! run, then exits once its time is up.
+//!
+//! Each engine is fed the way its own clients feed it: pivot with `COPY ...
+//! FROM STDIN` statements of Arrow IPC over the Postgres protocol,
+//! ClickHouse with `INSERT` statements of RowBinary over HTTP, through its
+//! official client. An insert is one statement either way, of the same rows.
 //!
 //! Every insert holds rows of every deployment, stamped with the time it is
 //! sent, later rows later. The batches are generated once at startup, and an
 //! insert only stamps one of them, so the loader takes little of the
 //! machine the server shares with it.
 //!
-//! usage: logs-load --connection <connection string> --table <name>
-//!            --inserts-per-second <number> --insert-bytes <Arrow bytes>
-//!            --seconds <run time> [--connections <count, default 32>]
+//! usage: logs-load --engine <pivot or clickhouse> --connection <where>
+//!            --table <name> --inserts-per-second <number>
+//!            --insert-bytes <Arrow bytes> --seconds <run time>
+//!            [--connections <count, default 32>]
 //!            [--query-file <path> --query-range-seconds <seconds, 0 for all>
 //!             --query-pause-ms <milliseconds>]
 //!
+//! `--connection` is a Postgres connection string for pivot and the HTTP URL
+//! of the server for ClickHouse. `--insert-bytes` sizes an insert by the
+//! Arrow bytes of its rows for both, so both are sent the same rows.
+//!
 //! output:
-//!   insert <started, unix seconds> <latency ms> <Arrow bytes> <rows>
+//!   insert <started, unix seconds> <latency ms> <Arrow bytes> <rows, or ERROR and why>
 //!   query <started, unix seconds> <latency ms> <rows, or ERROR and why>
 
 use std::collections::HashMap;
@@ -150,6 +159,105 @@ impl Deployment {
     }
 }
 
+/// The rows of one insert, held both ways they are sent: as Arrow columns,
+/// in the table's column order, and row by row. Neither holds the two time
+/// columns, which an insert stamps.
+struct Batch {
+    columns: Vec<ArrayRef>,
+    rows: Vec<LogRow>,
+}
+
+/// One log row without its time columns, the documents as JSON text.
+struct LogRow {
+    deployment_id: String,
+    cluster: &'static str,
+    namespace: String,
+    service: &'static str,
+    pod: String,
+    pod_uid: String,
+    container: &'static str,
+    node: String,
+    host_id: String,
+    image: String,
+    level: &'static str,
+    trace_id: String,
+    span_id: String,
+    message: &'static str,
+    body: String,
+    body_length: u64,
+    record_id: u64,
+    pattern_id: u64,
+    attributes: String,
+    resource: String,
+    measurements: String,
+    labels: String,
+}
+
+/// A log row as ClickHouse's client sends it: the table's columns in order,
+/// the times as microseconds, the documents as JSON text the server parses.
+#[derive(clickhouse::Row, serde::Serialize)]
+struct ClickHouseLog<'a> {
+    timestamp: i64,
+    minute: i64,
+    deployment_id: &'a str,
+    cluster: &'a str,
+    namespace: &'a str,
+    service: &'a str,
+    pod: &'a str,
+    pod_uid: &'a str,
+    container: &'a str,
+    node: &'a str,
+    host_id: &'a str,
+    image: &'a str,
+    level: &'a str,
+    trace_id: &'a str,
+    span_id: &'a str,
+    message: &'a str,
+    body: &'a str,
+    body_length: u64,
+    record_id: u64,
+    pattern_id: u64,
+    source: &'a str,
+    format: &'a str,
+    attributes: &'a str,
+    resource: &'a str,
+    measurements: &'a str,
+    labels: &'a str,
+}
+
+impl LogRow {
+    fn stamp(&self, timestamp: i64) -> ClickHouseLog<'_> {
+        ClickHouseLog {
+            timestamp,
+            minute: timestamp - timestamp.rem_euclid(60_000_000),
+            deployment_id: &self.deployment_id,
+            cluster: self.cluster,
+            namespace: &self.namespace,
+            service: self.service,
+            pod: &self.pod,
+            pod_uid: &self.pod_uid,
+            container: self.container,
+            node: &self.node,
+            host_id: &self.host_id,
+            image: &self.image,
+            level: self.level,
+            trace_id: &self.trace_id,
+            span_id: &self.span_id,
+            message: self.message,
+            body: &self.body,
+            body_length: self.body_length,
+            record_id: self.record_id,
+            pattern_id: self.pattern_id,
+            source: "kubernetes",
+            format: "json",
+            attributes: &self.attributes,
+            resource: &self.resource,
+            measurements: &self.measurements,
+            labels: &self.labels,
+        }
+    }
+}
+
 fn build_strings<S: AsRef<str>>(values: &[S]) -> ArrayRef {
     Arc::new(StringArray::from_iter_values(values.iter().map(AsRef::as_ref)))
 }
@@ -166,7 +274,8 @@ fn build_variants<S: AsRef<str>>(documents: &[S]) -> ArrayRef {
 
 /// The columns of `rows` rows drawn evenly from every deployment. The two
 /// time columns are placeholders an insert overwrites.
-fn generate_columns(deployments: &[Deployment], random: &mut Random, rows: usize) -> Vec<ArrayRef> {
+fn generate_batch(deployments: &[Deployment], random: &mut Random, rows: usize) -> Batch {
+    let mut log_rows = Vec::with_capacity(rows);
     let mut deployment_id = Vec::with_capacity(rows);
     let mut cluster = Vec::with_capacity(rows);
     let mut namespace = Vec::with_capacity(rows);
@@ -232,6 +341,36 @@ fn generate_columns(deployments: &[Deployment], random: &mut Random, rows: usize
             deployment.image, pod.host_id, pod.node, pod.uid,
         );
 
+        let row_trace_id = if is_traced { random.hex(32) } else { String::new() };
+        let row_span_id = if is_traced { random.hex(16) } else { String::new() };
+        let row_record_id = random.next();
+        let row_measurements = format!("{{\"duration_ms\":{duration_ms}}}");
+        let row_labels = format!("{{\"cluster\":\"{}\",\"level\":\"{row_level}\"}}", deployment.cluster);
+        log_rows.push(LogRow {
+            deployment_id: deployment.id.clone(),
+            cluster: deployment.cluster,
+            namespace: deployment.namespace.clone(),
+            service: deployment.service,
+            pod: pod.name.clone(),
+            pod_uid: pod.uid.clone(),
+            container: deployment.container,
+            node: pod.node.clone(),
+            host_id: pod.host_id.clone(),
+            image: deployment.image.clone(),
+            level: row_level,
+            trace_id: row_trace_id.clone(),
+            span_id: row_span_id.clone(),
+            message: row_message,
+            body: row_body.clone(),
+            body_length: (row_body.len() + row_attributes.len() + row_resource.len()) as u64,
+            record_id: row_record_id,
+            pattern_id: 2_241_814_617 + message_index,
+            attributes: row_attributes.clone(),
+            resource: row_resource.clone(),
+            measurements: row_measurements.clone(),
+            labels: row_labels.clone(),
+        });
+
         deployment_id.push(deployment.id.as_str());
         cluster.push(deployment.cluster);
         namespace.push(deployment.namespace.as_str());
@@ -243,19 +382,19 @@ fn generate_columns(deployments: &[Deployment], random: &mut Random, rows: usize
         host_id.push(pod.host_id.as_str());
         image.push(deployment.image.as_str());
         level.push(row_level);
-        trace_id.push(if is_traced { random.hex(32) } else { String::new() });
-        span_id.push(if is_traced { random.hex(16) } else { String::new() });
+        trace_id.push(row_trace_id);
+        span_id.push(row_span_id);
         message.push(row_message);
         body_length.push((row_body.len() + row_attributes.len() + row_resource.len()) as u64);
         body.push(row_body);
-        record_id.push(random.next());
+        record_id.push(row_record_id);
         pattern_id.push(2_241_814_617 + message_index);
         attributes.push(row_attributes);
         resource.push(row_resource);
-        measurements.push(format!("{{\"duration_ms\":{duration_ms}}}"));
-        labels.push(format!("{{\"cluster\":\"{}\",\"level\":\"{row_level}\"}}", deployment.cluster));
+        measurements.push(row_measurements);
+        labels.push(row_labels);
     }
-    vec![
+    let columns: Vec<ArrayRef> = vec![
         Arc::new(TimestampMicrosecondArray::from(vec![0i64; rows])),
         Arc::new(TimestampMicrosecondArray::from(vec![0i64; rows])),
         build_strings(&deployment_id),
@@ -282,7 +421,8 @@ fn generate_columns(deployments: &[Deployment], random: &mut Random, rows: usize
         build_variants(&resource),
         build_variants(&measurements),
         build_variants(&labels),
-    ]
+    ];
+    Batch { columns, rows: log_rows }
 }
 
 fn build_schema(columns: &[ArrayRef]) -> SchemaRef {
@@ -307,8 +447,11 @@ fn encode_as_ipc(schema: &SchemaRef, columns: Vec<ArrayRef>) -> Vec<u8> {
 /// insert is to carry.
 struct BatchPool {
     schema: SchemaRef,
-    batches: Vec<Vec<ArrayRef>>,
+    batches: Vec<Batch>,
     rows_per_batch: usize,
+    /// The Arrow bytes of one batch, which an insert is counted as carrying
+    /// however it is sent.
+    bytes_per_batch: usize,
 }
 
 impl BatchPool {
@@ -319,25 +462,27 @@ impl BatchPool {
     fn generate(insert_bytes: u64) -> Self {
         let deployments = Deployment::build_all();
         let mut random = Random(read_now_micros() as u64);
-        let sample = generate_columns(&deployments, &mut random, Self::SAMPLE_ROWS);
+        let sample = generate_batch(&deployments, &mut random, Self::SAMPLE_ROWS).columns;
         let schema = build_schema(&sample);
-        let empty_bytes = encode_as_ipc(&schema, generate_columns(&deployments, &mut random, 0)).len();
+        let empty = generate_batch(&deployments, &mut random, 0).columns;
+        let empty_bytes = encode_as_ipc(&schema, empty).len();
         let sample_bytes = encode_as_ipc(&schema, sample).len();
         let bytes_per_row = (sample_bytes - empty_bytes) as f64 / Self::SAMPLE_ROWS as f64;
         let rows_per_batch =
             ((insert_bytes.saturating_sub(empty_bytes as u64)) as f64 / bytes_per_row).round().max(1.0) as usize;
         let batch_count = (Self::POOL_BYTES / insert_bytes.max(1)).clamp(4, 64) as usize;
-        let batches = (0..batch_count)
-            .map(|_| generate_columns(&deployments, &mut random, rows_per_batch))
+        let batches: Vec<Batch> = (0..batch_count)
+            .map(|_| generate_batch(&deployments, &mut random, rows_per_batch))
             .collect();
-        Self { schema, batches, rows_per_batch }
+        let bytes_per_batch = encode_as_ipc(&schema, batches[0].columns.clone()).len();
+        Self { schema, batches, rows_per_batch, bytes_per_batch }
     }
 
     /// The Arrow IPC stream of the batch at `index`, its rows stamped with
     /// the microsecond before `now_micros` each, later rows later.
     fn encode_stamped(&self, index: usize, now_micros: i64) -> Vec<u8> {
         let rows = self.rows_per_batch as i64;
-        let mut columns = self.batches[index % self.batches.len()].clone();
+        let mut columns = self.batches[index % self.batches.len()].columns.clone();
         let timestamps: Vec<i64> = (0..rows).map(|row| now_micros - rows + row).collect();
         let minutes: Vec<i64> = timestamps.iter().map(|at| at - at.rem_euclid(60_000_000)).collect();
         columns[TIMESTAMP_COLUMN] = Arc::new(TimestampMicrosecondArray::from(timestamps));
@@ -346,8 +491,61 @@ impl BatchPool {
     }
 }
 
+/// One connection's inserts into ClickHouse: stamp a batch, send it as one
+/// INSERT of RowBinary through the official client, then wait until this
+/// connection's share of the rate allows the next. Inserts are synchronous,
+/// each one a part of its own, as the client leaves them by default. A
+/// refused insert is reported and the next one sent.
+async fn insert_into_clickhouse_at_rate(
+    url: String,
+    table: String,
+    inserts_per_second: f64,
+    first_batch: usize,
+    pool: Arc<BatchPool>,
+) {
+    // A client's connections live on the runtime that opened them, so each
+    // connection thread has a client of its own.
+    let client = clickhouse::Client::default()
+        .with_url(url)
+        .with_setting("async_insert", "0")
+        .with_setting("input_format_binary_read_json_as_string", "1");
+    let started = Instant::now();
+    for sent in 0u64.. {
+        let due = Duration::from_secs_f64(sent as f64 / inserts_per_second);
+        if let Some(wait) = due.checked_sub(started.elapsed()) {
+            tokio::time::sleep(wait).await;
+        }
+        let now_micros = read_now_micros();
+        let batch = &pool.batches[(first_batch + sent as usize) % pool.batches.len()];
+        let first_timestamp = now_micros - batch.rows.len() as i64;
+        let insert_started = Instant::now();
+        let inserted = async {
+            let mut insert = client.insert::<ClickHouseLog<'_>>(&table).await?;
+            for (row, timestamp) in batch.rows.iter().zip(first_timestamp..) {
+                insert.write(&row.stamp(timestamp)).await?;
+            }
+            insert.end().await
+        }
+        .await;
+        let latency_ms = insert_started.elapsed().as_secs_f64() * 1000.0;
+        let started_at = now_micros as f64 / 1e6;
+        match inserted {
+            Ok(()) => println!(
+                "insert {started_at:.3} {latency_ms:.1} {} {}",
+                pool.bytes_per_batch, pool.rows_per_batch,
+            ),
+            Err(error) => println!(
+                "insert {started_at:.3} {latency_ms:.1} {} ERROR {}",
+                pool.bytes_per_batch,
+                error.to_string().replace('\n', " "),
+            ),
+        }
+    }
+}
+
 /// One connection's inserts: stamp a batch, send it as one COPY, then wait
-/// until this connection's share of the rate allows the next.
+/// until this connection's share of the rate allows the next. A refused
+/// insert is reported and the next one sent.
 async fn insert_at_rate(
     connection: String,
     table: String,
@@ -368,16 +566,31 @@ async fn insert_at_rate(
         let bytes = pool.encode_stamped(first_batch + sent as usize, now_micros);
         let byte_count = bytes.len();
         let insert_started = Instant::now();
-        let sink = client.copy_in::<_, bytes::Bytes>(&statement).await.unwrap();
-        let mut sink = Box::pin(sink);
-        sink.send(bytes::Bytes::from(bytes)).await.unwrap();
-        sink.as_mut().finish().await.unwrap();
-        println!(
-            "insert {:.3} {:.1} {byte_count} {}",
-            now_micros as f64 / 1e6,
-            insert_started.elapsed().as_secs_f64() * 1000.0,
-            pool.rows_per_batch,
-        );
+        let inserted = async {
+            let sink = client.copy_in::<_, bytes::Bytes>(&statement).await?;
+            let mut sink = Box::pin(sink);
+            sink.send(bytes::Bytes::from(bytes)).await?;
+            sink.as_mut().finish().await
+        }
+        .await;
+        let latency_ms = insert_started.elapsed().as_secs_f64() * 1000.0;
+        let started_at = now_micros as f64 / 1e6;
+        match inserted {
+            Ok(_) => println!(
+                "insert {started_at:.3} {latency_ms:.1} {byte_count} {}",
+                pool.rows_per_batch
+            ),
+            // A refused insert leaves the connection usable; one that lost
+            // its connection ends the run.
+            Err(error) if !client.is_closed() => println!(
+                "insert {started_at:.3} {latency_ms:.1} {byte_count} ERROR {}",
+                error.to_string().replace('\n', " "),
+            ),
+            Err(error) => {
+                eprintln!("an insert lost its connection: {error}");
+                return;
+            }
+        }
     }
 }
 
@@ -401,6 +614,42 @@ fn format_utc(unix_seconds: i64) -> String {
         second_of_day % 3_600 / 60,
         second_of_day % 60,
     )
+}
+
+/// What one row of the benchmark's query holds, as ClickHouse answers it.
+#[derive(clickhouse::Row, serde::Deserialize)]
+#[allow(dead_code)]
+struct ClickHouseQueryRow {
+    cluster: String,
+    level: String,
+    tenant: Option<String>,
+    logs: u64,
+}
+
+/// Run the query again and again against ClickHouse, as
+/// [`query_repeatedly`] does against pivot.
+async fn query_clickhouse_repeatedly(url: String, query: String, range_seconds: i64, pause: Duration) {
+    let client = clickhouse::Client::default().with_url(url);
+    loop {
+        let now_micros = read_now_micros();
+        let since = match range_seconds {
+            0 => 0,
+            range_seconds => now_micros / 1_000_000 - range_seconds,
+        };
+        let sql = query.replace("{since}", &format!("toDateTime64('{}', 6, 'UTC')", format_utc(since)));
+        let started = Instant::now();
+        let outcome = client.query_raw(&sql).fetch_all::<ClickHouseQueryRow>().await;
+        let latency_ms = started.elapsed().as_secs_f64() * 1000.0;
+        let started_at = now_micros as f64 / 1e6;
+        match outcome {
+            Ok(rows) => println!("query {started_at:.3} {latency_ms:.1} {}", rows.len()),
+            Err(error) => println!(
+                "query {started_at:.3} {latency_ms:.1} ERROR {}",
+                error.to_string().replace('\n', " "),
+            ),
+        }
+        tokio::time::sleep(pause).await;
+    }
 }
 
 /// Run the query again and again on one connection. Each run reads the rows
@@ -454,6 +703,11 @@ fn main() {
         .map(|pair| (pair[0].trim_start_matches("--"), pair[1].as_str()))
         .collect();
     let read = |name: &str| *options.get(name).unwrap_or_else(|| panic!("--{name} is required"));
+    let is_clickhouse = match read("engine") {
+        "pivot" => false,
+        "clickhouse" => true,
+        engine => panic!("--engine is pivot or clickhouse, not {engine}"),
+    };
     let connection = read("connection").to_string();
     let table = read("table").to_string();
     let inserts_per_second: f64 = read("inserts-per-second").parse().unwrap();
@@ -466,22 +720,26 @@ fn main() {
         "{} batches of {} rows, {} Arrow bytes each",
         pool.batches.len(),
         pool.rows_per_batch,
-        pool.encode_stamped(0, read_now_micros()).len(),
+        pool.bytes_per_batch,
     );
     for index in 0..connections {
-        spawn_on_own_thread(insert_at_rate(
-            connection.clone(),
-            table.clone(),
-            inserts_per_second / connections as f64,
-            index,
-            pool.clone(),
-        ));
+        let (connection, table, pool) = (connection.clone(), table.clone(), pool.clone());
+        let rate = inserts_per_second / connections as f64;
+        if is_clickhouse {
+            spawn_on_own_thread(insert_into_clickhouse_at_rate(connection, table, rate, index, pool));
+        } else {
+            spawn_on_own_thread(insert_at_rate(connection, table, rate, index, pool));
+        }
     }
     if let Some(query_file) = options.get("query-file") {
         let query = std::fs::read_to_string(query_file).unwrap();
         let range_seconds: i64 = read("query-range-seconds").parse().unwrap();
         let pause = Duration::from_millis(read("query-pause-ms").parse().unwrap());
-        spawn_on_own_thread(query_repeatedly(connection, query, range_seconds, pause));
+        if is_clickhouse {
+            spawn_on_own_thread(query_clickhouse_repeatedly(connection, query, range_seconds, pause));
+        } else {
+            spawn_on_own_thread(query_repeatedly(connection, query, range_seconds, pause));
+        }
     }
     std::thread::sleep(Duration::from_secs(seconds));
     std::process::exit(0);

@@ -27,6 +27,8 @@
 /benchmarks/*/starrocks/.sr_dir
 /benchmarks/ingest/loader/target/
 /benchmarks/ingest/pivot-source/
+/benchmarks/ingest/clickhouse
+/benchmarks/ingest/clickhouse-data/
 
 # Editors
 /.idea/

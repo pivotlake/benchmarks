@@ -11,8 +11,10 @@ arrow-ipc = { git = "https://github.com/pivotlake/arrow-rs", rev = "801b97807182
 arrow-schema = { git = "https://github.com/pivotlake/arrow-rs", rev = "801b978071829d0f9ef5980dc37c7fbcbed1bb78" }
 parquet-variant-compute = { git = "https://github.com/pivotlake/arrow-rs", rev = "801b978071829d0f9ef5980dc37c7fbcbed1bb78" }
 bytes = "1"
+clickhouse = "0.15"
 futures = "0.3"
 tokio = { version = "1", features = ["rt", "time"] }
+serde = { version = "1", features = ["derive"] }
 tokio-postgres = "0.7"
 
 [profile.release]

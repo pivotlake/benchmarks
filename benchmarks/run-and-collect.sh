@@ -32,8 +32,8 @@
 #   starrocks            tpch: starrocks              (no SSB or ClickBench entry)
 # DATA_DIR, PIVOT_BINARY and BENCH_TIMEOUT pass through to the runs.
 #
-# ingest is pivot's alone and has no result file for the website: it runs
-# ingest/run.sh with the options in INGEST_OPTIONS (its lake from
+# ingest has pivot and clickhouse, and no result file for the website: it runs
+# ingest/run.sh for each with the options in INGEST_OPTIONS (pivot's lake from
 # INGEST_LAKE_URL) and leaves its results in ingest/results/. PIVOT_REF builds
 # pivot from that branch, tag or commit first (ingest/build-pivot.sh).
 
@@ -56,7 +56,7 @@ engine_for() {
         clickbench/clickhouse-parquet) echo clickhouse-parquet-partitioned ;;
         clickbench/datafusion)         echo datafusion-partitioned ;;
         clickbench/starrocks)          ;;
-        ingest/pivot)                  echo pivot ;;
+        ingest/pivot|ingest/clickhouse) echo "$database" ;;
         ingest/*)                      ;;
         ssb/starrocks)                 ;;
         */*)                           echo "$database" ;;
@@ -116,7 +116,9 @@ for benchmark in $benchmarks; do
             export PIVOT_BINARY
         fi
         # The options are words as a shell splits them, quotes included.
-        eval "ingest/run.sh ${INGEST_OPTIONS:-}" || failed+=("ingest")
+        for engine in "${engines[@]}"; do
+            eval "ingest/run.sh --engine $engine ${INGEST_OPTIONS:-}" || failed+=("ingest: $engine")
+        done
         continue
     fi
 

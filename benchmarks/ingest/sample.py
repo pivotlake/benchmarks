@@ -5,15 +5,17 @@ spent so far by the whole machine, by the server and by the loader, and how
 the server's buffer pool is used.
 
 The live files and the buffer pool are asked of the server itself, from its
-system tables: `system.table_files` has a row per live data file, and
-`system.memory_blocks` a row per block of the pool, each free, pinned by an
-operator, or lent to a cache.
+system tables. Pivot's `system.table_files` has a row per live data file, and
+its `system.memory_blocks` a row per block of the pool, each free, pinned by
+an operator, or lent to a cache. ClickHouse's `system.parts` has a row per
+part, and its active parts are the table's live files; it has no pool, so
+those fields are `NA`.
 
 The CPU times are running totals in clock ticks, as /proc counts them: the
 machine's busy and total ticks over all its cores, and the ticks of the
 server's process and of the loader's, whichever loader is running.
 
-Usage: sample.py <server pid> <server port> <table> <samples file>
+Usage: sample.py <pivot or clickhouse> <server pid> <pivot's port> <table> <samples file>
 """
 
 import os
@@ -21,21 +23,25 @@ import subprocess
 import sys
 import time
 
-server_pid, server_port, table, samples_path = sys.argv[1:]
+engine, server_pid, server_port, table, samples_path = sys.argv[1:]
 LOADER_NAME = "logs-load"
 LIVE_FILES_SQL = (
     "SELECT count(*) FROM system.table_files f JOIN system.tables t ON t.id = f.table_id "
     f"WHERE t.name = '{table}'"
 )
 POOL_SQL = "SELECT state, sum(bytes) FROM system.memory_blocks GROUP BY state"
+ACTIVE_PARTS_SQL = f"SELECT count() FROM system.parts WHERE active AND table = '{table}'"
+CLICKHOUSE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "clickhouse")
 
 
 def run_sql(sql):
     """The rows the server answers `sql` with, each a list of its fields."""
-    answer = subprocess.run(
-        ["psql", "-h", "127.0.0.1", "-p", server_port, "-U", "pivot", "-d", "postgres",
-         "-X", "-q", "-A", "-t", "-F", "\t", "-v", "ON_ERROR_STOP=1", "-c", sql],
-        check=True, capture_output=True, text=True)
+    command = {
+        "pivot": ["psql", "-h", "127.0.0.1", "-p", server_port, "-U", "pivot", "-d", "postgres",
+                  "-X", "-q", "-A", "-t", "-F", "\t", "-v", "ON_ERROR_STOP=1", "-c", sql],
+        "clickhouse": [CLICKHOUSE, "client", "--query", sql],
+    }[engine]
+    answer = subprocess.run(command, check=True, capture_output=True, text=True)
     return [line.split("\t") for line in answer.stdout.splitlines() if line]
 
 
@@ -89,8 +95,12 @@ def read_loader_ticks():
 while True:
     started = time.time()
     try:
-        live_files = int(run_sql(LIVE_FILES_SQL)[0][0])
-        pool = read_pool_bytes()
+        if engine == "pivot":
+            live_files = int(run_sql(LIVE_FILES_SQL)[0][0])
+            pool = read_pool_bytes()
+        else:
+            live_files = int(run_sql(ACTIVE_PARTS_SQL)[0][0])
+            pool = ("NA", "NA", "NA")
     except (subprocess.CalledProcessError, IndexError, ValueError) as error:
         print(f"sample.py: asking the server failed: {error}", file=sys.stderr)
         live_files, pool = "NA", ("NA", "NA", "NA")
